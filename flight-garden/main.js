@@ -318,7 +318,7 @@ const BUTTERFLY_ATLAS_COLS = 8;
 const BUTTERFLY_ATLAS_ROWS = 8;
 const BUTTERFLY_ATLAS_FRAMES = 57;   // cells 57..63 of the 8×8 grid are empty
 
-const BUTTERFLY_TEX = new THREE.TextureLoader().load("assets/butterfly_atlas.webp");
+const BUTTERFLY_TEX = new THREE.TextureLoader().load("../assets/butterfly_atlas.webp");
 BUTTERFLY_TEX.colorSpace = THREE.SRGBColorSpace;
 BUTTERFLY_TEX.generateMipmaps = false;
 BUTTERFLY_TEX.minFilter = THREE.LinearFilter;
@@ -1664,15 +1664,15 @@ async function loadGardenVideoTexture(url, {
  * VideoTexture is uploaded to the GPU, so without CORS headers the WebGL
  * context is tainted and the upload throws.
  */
-const R2_PUBLIC_BASE = "";
+const R2_PUBLIC_BASE = "https://pub-085468ffd2bd40868c645940c8033bb2.r2.dev";
 
-/** Must mirror VIDEO_KEYS in api/_r2.js — that file is the security boundary. */
+/** Object names in the data-art R2 bucket (shared with the Data Art Studio). */
 const VIDEO_PATHS = {
-  art1: "flight-simulation/4k_render_final_001.mp4",
-  art1g: "flight-simulation/art1g.mp4",
-  art1v: "flight-simulation/art1v.mp4",
-  art2g: "flight-simulation/art2g.mp4",
-  art2v: "flight-simulation/art2v.mp4"
+  art1: "garden.mp4",
+  art1g: "art_1_grayscale.mp4",
+  art1v: "art_1_velocity.mp4",
+  art2g: "art_2_grayscale.mp4",
+  art2v: "art_2_velocity.mp4"
 };
 
 /**
@@ -1905,7 +1905,9 @@ const DATA_SOURCES = {
       line: "An airport, rendered as a living garden",
       sub: "Butterflies are flights · Flowers are terminals"
     },
-    endpoint: "/api/wind",
+    // The studio copy is a standalone visual output. Keep its playback at
+    // the authored speed instead of requiring the original API server.
+    endpoint: null,
     pollMs: 5 * 60 * 1000,   // real-time enough without hammering the free tier
     tintMode: "none",
     flights: true,
@@ -2742,7 +2744,9 @@ async function activateOutput(artId, dataId) {
   // Deliberately not awaited: this output is already up, so warming the
   // other art options' video happens quietly in the background and must
   // never delay the veil lifting on this one.
-  prefetchOtherArt(artId);
+  if (!new URLSearchParams(location.search).has("embed")) {
+    prefetchOtherArt(artId);
+  }
 }
 
 
@@ -5069,6 +5073,19 @@ function initHUDToggle() {
   document.body.appendChild(toggleBtn);
   ui.hudToggleBtn = toggleBtn;
 
+  if (new URLSearchParams(location.search).has("embed")) {
+    const backBtn = document.createElement("button");
+    backBtn.type = "button";
+    backBtn.className = "studio-back-btn";
+    backBtn.title = "Back to Data Art Studio";
+    backBtn.setAttribute("aria-label", "Back to Data Art Studio");
+    backBtn.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>';
+    backBtn.addEventListener("click", () => {
+      window.parent.postMessage({ type: "flight-garden-back" }, "*");
+    });
+    document.body.appendChild(backBtn);
+  }
+
   const toggleHUD = () => {
     const isActive = hud.classList.toggle("hud-active");
     document.body.classList.toggle("hud-active", isActive);
@@ -5192,6 +5209,22 @@ buildLocationSelector();
 initHUDToggle();
 initPostProcessing();
 animate();
+
+// The studio launches this page as its generated Flight output. Bypass the
+// chooser in that embedded context, while leaving the original chooser and
+// "New Output" behavior intact when this page is opened directly.
+if (new URLSearchParams(location.search).has("embed")) {
+  document.documentElement.classList.add("embed-mode");
+  document.body.classList.add("embed-mode");
+  ui.introGate?.classList.add("gate-hidden");
+  if (ui.hudToggleBtn) ui.hudToggleBtn.hidden = false;
+  // Keep the Flight Garden identity reveal when the output first opens,
+  // without bringing back the separate data/art chooser.
+  beginIntro();
+  activateOutput("art1", "flight").catch((err) => {
+    console.warn("[Flight Garden] embedded output failed to activate.", err);
+  });
+}
 
 // Nothing plays until the intro gate's Generate button fires — see
 // buildIntroGate. It calls activateOutput (which seeds the airport, points

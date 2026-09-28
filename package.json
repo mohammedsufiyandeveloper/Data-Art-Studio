@@ -1,12 +1,16 @@
 {
-  "name": "flight-simulation",
-  "version": "1.0.0",
-  "description": "An airport operations visualization disguised as a living garden. Butterflies are flights.",
-  "main": "main.js",
+  "name": "data-art-studio",
+  "private": true,
+  "type": "module",
   "scripts": {
-    "start": "node server.js"
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC"
+  "dependencies": {
+    "three": "0.158.0"
+  },
+  "devDependencies": {
+    "vite": "^7.0.0"
+  }
 }

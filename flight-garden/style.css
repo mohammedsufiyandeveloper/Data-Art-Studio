@@ -67,6 +67,20 @@
   --panel-width: clamp(180px, 13vw, 220px);
 }
 
+/* Data Art Studio presents Flight Garden as an already-generated output.
+   Skip the standalone cinematic gate/reveal so its controls, terminal labels,
+   and live scene are all available as soon as the embedded frame appears. */
+html.embed-mode .panel {
+  opacity: 1;
+  transform: none;
+  animation: none;
+}
+
+html.embed-mode .intro-gate,
+html.embed-mode .new-output-btn {
+  display: none !important;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -1898,6 +1912,46 @@ body {
 }
 
 .hud-toggle-btn:hover {
+  background: rgba(15, 23, 32, 0.08);
+  border-color: rgba(15, 23, 32, 0.28);
+  transform: scale(1.05);
+}
+
+/* Compact Data Art Studio return control, positioned directly beside the
+   HUD toggle so it reads as part of the same floating control group. */
+.studio-back-btn {
+  position: fixed;
+  top: var(--hud-padding);
+  right: calc(var(--hud-padding) + 134px);
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--glass);
+  border: 1px solid var(--stroke);
+  box-shadow: var(--shadow);
+  backdrop-filter: var(--blur);
+  -webkit-backdrop-filter: var(--blur);
+  color: var(--text);
+  cursor: pointer;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.3s, transform 0.2s, border-color 0.3s;
+}
+
+.studio-back-btn svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.studio-back-btn:hover {
   background: rgba(15, 23, 32, 0.08);
   border-color: rgba(15, 23, 32, 0.28);
   transform: scale(1.05);
