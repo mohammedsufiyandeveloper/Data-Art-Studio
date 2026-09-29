@@ -182,7 +182,28 @@
       color: var(--lp-ink);
     }
 
+    /* Smoke layer: brand-coloured smoke that follows the cursor and bursts
+       on click (see the landing smoke script). A light blur only softens
+       pixel edges; the wisps carry their own texture. */
+    .lp-ink {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 0;
+      pointer-events: none;
+      filter: saturate(1.1) contrast(1.08);
+      opacity: 0;
+      transition: opacity 1s ease;
+    }
+
+    #page1.active .lp-ink.running {
+      opacity: 1;
+    }
+
     .landing {
+      position: relative;
+      z-index: 1;
       min-height: 100vh;
       min-height: 100dvh;
       display: flex;
@@ -233,8 +254,10 @@
       align-items: start;
       gap: calc(32 * var(--u));
       padding: calc(48 * var(--u)) calc(36 * var(--u)) calc(40 * var(--u));
-      background: linear-gradient(180deg, #fbfbfb 0%, #f4f4f4 100%);
-      border: 1px solid #ededed;
+      background: linear-gradient(180deg, rgba(251, 251, 251, 0.42) 0%, rgba(244, 244, 244, 0.55) 100%);
+      -webkit-backdrop-filter: blur(12px) saturate(1.15);
+      backdrop-filter: blur(12px) saturate(1.15);
+      border: 1px solid rgba(237, 237, 237, 0.9);
       border-radius: calc(32 * var(--u));
       box-shadow: var(--lp-raise-soft);
     }
@@ -2420,10 +2443,10 @@
 
     .loading-hint {
       margin-top: 44px;
-      font-size: 0.72rem;
+      font-size: 0.85rem;
       color: #9ca3af;
       text-align: center;
-      max-width: 440px;
+      max-width: 500px;
       line-height: 1.7;
     }
 
@@ -2562,6 +2585,7 @@
 
   <!-- ====== PAGE 1 — CHOOSE YOUR OUTPUT ====== -->
   <div id="page1" class="page">
+    <canvas id="lpInk" class="lp-ink" aria-hidden="true"></canvas>
     <div class="landing">
       <header class="landing-header">
         <h1 class="landing-kicker">Data <span>Art</span></h1>
@@ -3069,22 +3093,22 @@
       <span style="left: 78%; top: 35%; animation-delay: 1.8s;"></span>
       <span style="left: 88%; top: 60%; animation-delay: 3.0s;"></span>
     </div>
-    <div class="loading-title" id="loadingTitle">Loading Data Art</div>
-    <div class="loading-sub">Preparing studio · one moment</div>
+    <div class="loading-title" id="loadingTitle">Bringing your data to life</div>
+    <div class="loading-sub" id="loadingSub">Setting up your piece</div>
     <div class="loading-bar-wrapper">
       <div class="loading-bar-track">
         <div class="loading-bar-fill" id="loadingFill"></div>
       </div>
       <div class="loading-status">
-        <span id="loadingStatus">Connecting…</span>
+        <span id="loadingStatus">Getting started…</span>
         <span class="pct" id="loadingPct">0%</span>
       </div>
     </div>
-    <div class="loading-hint">Downloading both videos into memory for buttery smooth playback. On a slow connection this
-      may take a moment.</div>
+    <div class="loading-hint">The artwork loads in full before it plays, so it runs smoothly from the first frame.
+      On a slow connection this can take a few seconds.</div>
     <div class="loading-error" id="loadingError">
-      <div class="loading-error-msg" id="loadingErrorMsg">Preload failed.</div>
-      <button class="loading-continue" id="loadingContinue">Continue anyway (stream mode)</button>
+      <div class="loading-error-msg" id="loadingErrorMsg">The artwork couldn't load.</div>
+      <button class="loading-continue" id="loadingContinue">Play it anyway</button>
     </div>
   </div>
 
@@ -3105,6 +3129,7 @@
       const backBtn = document.getElementById('backBtn');
       const loadingOverlay = document.getElementById('loadingOverlay');
       const loadingTitle = document.getElementById('loadingTitle');
+      const loadingSub = document.getElementById('loadingSub');
 
       let currentPage = 0;
       let activeDataMode = 'attendance';
@@ -3177,7 +3202,18 @@
         hlAdjVal.textContent = hlDefault.toFixed(2);
         shAdjVal.textContent = shDefault.toFixed(2);
 
-        loadingTitle.textContent = 'Loading ' + cardTitle;
+        // Say what is being made, in the viewer's terms.
+        const dataKey = (dataTitle || '').toLowerCase();
+        if (dataKey === 'weather') {
+          loadingTitle.textContent = "Painting today's weather onto " + artTitle;
+          loadingSub.textContent = 'Checking the skies';
+        } else if (dataKey === 'attendance') {
+          loadingTitle.textContent = "Painting today's attendance onto " + artTitle;
+          loadingSub.textContent = 'Seeing who made it in';
+        } else {
+          loadingTitle.textContent = 'Preparing ' + cardTitle;
+          loadingSub.textContent = 'Setting up your piece';
+        }
 
         activeDataMode = dataTitle.toLowerCase() === 'weather' ? 'weather' : 'attendance';
         configureStudioDataMode(activeDataMode);
@@ -4087,7 +4123,7 @@
         loadingOverlay.classList.add('active');
         loadingFill.style.width = '0%';
         loadingPct.textContent = '0%';
-        loadingStatus.textContent = 'Connecting…';
+        loadingStatus.textContent = 'Getting started…';
         await preloadAll();
       }
 
@@ -4099,27 +4135,27 @@
           const mainUrl = videoUrl(mainUrlInput.value.trim());
           const veloUrl = videoUrl(veloUrlInput.value.trim());
 
-          loadingStatus.textContent = 'Downloading main video…';
+          loadingStatus.textContent = 'Loading the artwork…';
           setStatus(mainUrlStatus, 'loading', 'loading');
           const mainBlobUrl = await fetchAsBlob(mainUrl, (p) => {
             const pct = p * 50;
             loadingFill.style.width = pct + '%';
             loadingPct.textContent = Math.round(pct) + '%';
-            loadingStatus.textContent = 'Main video · ' + Math.round(p * 100) + '%';
+            loadingStatus.textContent = 'Loading the artwork…';
           });
 
-          loadingStatus.textContent = 'Downloading velocity map…';
+          loadingStatus.textContent = 'Mapping its movement…';
           setStatus(veloUrlStatus, 'loading', 'loading');
           const veloBlobUrl = await fetchAsBlob(veloUrl, (p) => {
             const pct = 50 + p * 50;
             loadingFill.style.width = pct + '%';
             loadingPct.textContent = Math.round(pct) + '%';
-            loadingStatus.textContent = 'Velocity map · ' + Math.round(p * 100) + '%';
+            loadingStatus.textContent = 'Mapping its movement…';
           });
 
           loadingFill.style.width = '100%';
           loadingPct.textContent = '100%';
-          loadingStatus.textContent = 'Ready — starting studio…';
+          loadingStatus.textContent = 'Adding the colour…';
 
           mainVideo.crossOrigin = '';
           mainVideoB.crossOrigin = '';
@@ -4157,8 +4193,8 @@
         } catch (err) {
           console.error('Preload failed:', err);
           loadingError.classList.add('active');
-          loadingErrorMsg.textContent = 'Preload failed: ' + err.message;
-          loadingStatus.textContent = 'Preload failed';
+          loadingErrorMsg.textContent = "The artwork couldn't load. Check your connection, or play it while it streams.";
+          loadingStatus.textContent = 'Something went wrong';
         } finally {
           preloading = false;
         }
@@ -4909,6 +4945,278 @@
           embeddedFlightGarden.setAttribute('src', embeddedFlightGarden.dataset.src);
         }
       }
+    })();
+  </script>
+
+  <script>
+    // Landing page smoke: strands of brand-coloured smoke ride a velocity
+    // field that the cursor stirs. Each strand draws a thin ribbon with a
+    // bright satin core (the shine) onto a canvas that slowly fades, so the
+    // paths linger as silky, curling wisps. Clicks release a burst.
+    // Runs only while the landing is showing.
+    (() => {
+      const page = document.getElementById('page1');
+      const canvas = document.getElementById('lpInk');
+      if (!page || !canvas) return;
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      const ctx = canvas.getContext('2d');
+
+      // Brand palette. Weights keep the reds leading; charcoal and grey
+      // only add depth.
+      const PALETTE = [
+        { hex: '#B8325D', weight: 3 },
+        { hex: '#D6285B', weight: 3 },
+        { hex: '#800F2F', weight: 2 },
+        { hex: '#6B1D2C', weight: 1.5 },
+        { hex: '#E21D3E', weight: 3 },
+        { hex: '#21242A', weight: 0.6 },
+        { hex: '#A4A2A5', weight: 1 }
+      ].map(c => {
+        // The shine: each colour lifted most of the way to white.
+        const n = parseInt(c.hex.slice(1), 16);
+        const lift = v => Math.round(v + (255 - v) * 0.62);
+        return { ...c, rgb: [n >> 16, (n >> 8) & 255, n & 255],
+          sheen: [lift(n >> 16), lift((n >> 8) & 255), lift(n & 255)] };
+      });
+      const WEIGHT_SUM = PALETTE.reduce((sum, c) => sum + c.weight, 0);
+      function pickColor() {
+        let r = Math.random() * WEIGHT_SUM;
+        for (let i = 0; i < PALETTE.length; i++) {
+          r -= PALETTE[i].weight;
+          if (r <= 0) return i;
+        }
+        return 0;
+      }
+      const rgba = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
+
+      const SCALE = Math.min(window.devicePixelRatio || 1, 1.5);  // canvas px per CSS px
+      const MAX_STRANDS = 900;
+      const GRID = 24;               // CSS px per velocity cell
+      const FADE_PER_SEC = 0.9;      // how quickly old wisps dissolve
+
+      // Soft haze under the strands, for smoky volume.
+      function hazeSprite(hex) {
+        const c = document.createElement('canvas');
+        c.width = c.height = 64;
+        const g = c.getContext('2d');
+        const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+        grad.addColorStop(0, hex + '55');
+        grad.addColorStop(1, hex + '00');
+        g.fillStyle = grad;
+        g.fillRect(0, 0, 64, 64);
+        return c;
+      }
+      const haze = PALETTE.map(c => hazeSprite(c.hex));
+
+      let W = 0, H = 0, cols = 0, rows = 0, vx, vy;
+      const strands = [];
+      const pointer = { x: -1, y: -1, px: -1, py: -1, active: false, color: pickColor() };
+      let running = false, rafId = null, lastTime = 0, ambientClock = 0;
+
+      function resize() {
+        W = window.innerWidth; H = window.innerHeight;
+        canvas.width = Math.ceil(W * SCALE);
+        canvas.height = Math.ceil(H * SCALE);
+        cols = Math.ceil(W / GRID) + 1;
+        rows = Math.ceil(H / GRID) + 1;
+        vx = new Float32Array(cols * rows);
+        vy = new Float32Array(cols * rows);
+      }
+
+      function cellIndex(x, y) {
+        const cx = Math.max(0, Math.min(cols - 1, (x / GRID) | 0));
+        const cy = Math.max(0, Math.min(rows - 1, (y / GRID) | 0));
+        return cy * cols + cx;
+      }
+
+      // Pushes the field around (x, y) with a soft falloff.
+      function stir(x, y, dx, dy, radius) {
+        const r = Math.ceil(radius / GRID);
+        const cx = (x / GRID) | 0, cy = (y / GRID) | 0;
+        for (let j = -r; j <= r; j++) {
+          for (let i = -r; i <= r; i++) {
+            const gx = cx + i, gy = cy + j;
+            if (gx < 0 || gy < 0 || gx >= cols || gy >= rows) continue;
+            const falloff = Math.max(0, 1 - Math.hypot(i, j) / (r + 1));
+            const k = gy * cols + gx;
+            vx[k] += dx * falloff;
+            vy[k] += dy * falloff;
+          }
+        }
+      }
+
+      function addStrand(x, y, dx, dy, color, width, life) {
+        if (strands.length >= MAX_STRANDS) strands.shift();
+        strands.push({
+          x, y, dx, dy, color, width, life, age: 0,
+          // Each strand curls its own way, which is what braids the smoke.
+          curl: (Math.random() - 0.5) * 5
+        });
+      }
+
+      function splash(x, y) {
+        const color = pickColor();
+        for (let i = 0; i < 90; i++) {
+          const angle = Math.random() * Math.PI * 2;
+          const speed = 60 + Math.random() * 320;
+          const c = Math.random() < 0.7 ? color : pickColor();
+          addStrand(x + Math.cos(angle) * 4, y + Math.sin(angle) * 4,
+            Math.cos(angle) * speed, Math.sin(angle) * speed, c, 1 + Math.random() * 2.6, 1.6 + Math.random() * 1.8);
+        }
+        for (let i = 0; i < 12; i++) {
+          const angle = (i / 12) * Math.PI * 2;
+          stir(x + Math.cos(angle) * 40, y + Math.sin(angle) * 40, Math.cos(angle) * 200, Math.sin(angle) * 200, 90);
+        }
+        pointer.color = pickColor();
+        start();
+      }
+
+      window.addEventListener('pointermove', e => {
+        if (!page.classList.contains('active')) return;
+        pointer.x = e.clientX; pointer.y = e.clientY;
+        if (!pointer.active) { pointer.px = pointer.x; pointer.py = pointer.y; pointer.active = true; }
+        start();
+      }, { passive: true });
+      window.addEventListener('pointerdown', e => {
+        if (page.classList.contains('active')) splash(e.clientX, e.clientY);
+      }, { passive: true });
+      document.addEventListener('pointerleave', () => { pointer.active = false; });
+      window.addEventListener('resize', resize);
+      document.addEventListener('visibilitychange', () => { if (document.hidden) stop(); else start(); });
+
+      // Start/stop with the landing page (pages switch by toggling .active).
+      new MutationObserver(() => {
+        if (page.classList.contains('active')) start(); else stop();
+      }).observe(page, { attributes: true, attributeFilter: ['class'] });
+
+      function start() {
+        if (running || document.hidden || !page.classList.contains('active')) return;
+        running = true;
+        canvas.classList.add('running');
+        lastTime = performance.now();
+        rafId = requestAnimationFrame(frame);
+      }
+
+      function stop() {
+        running = false;
+        canvas.classList.remove('running');
+        if (rafId) cancelAnimationFrame(rafId);
+        rafId = null;
+      }
+
+      function frame(now) {
+        if (!running) return;
+        const dt = Math.min(0.05, (now - lastTime) / 1000);
+        lastTime = now;
+        const t = now / 1000;
+
+        // Cursor: stir the field along the stroke and release strands.
+        if (pointer.active) {
+          const dx = pointer.x - pointer.px, dy = pointer.y - pointer.py;
+          const dist = Math.hypot(dx, dy);
+          if (dist > 0.5) {
+            const steps = Math.min(8, Math.ceil(dist / 12));
+            for (let i = 1; i <= steps; i++) {
+              const x = pointer.px + (dx * i) / steps, y = pointer.py + (dy * i) / steps;
+              stir(x, y, (dx / dt) * 0.07, (dy / dt) * 0.07, 60);
+              for (let n = 0; n < 2; n++) {
+                addStrand(x + (Math.random() - 0.5) * 12, y + (Math.random() - 0.5) * 12,
+                  dx / dt * 0.35 + (Math.random() - 0.5) * 60, dy / dt * 0.35 + (Math.random() - 0.5) * 60,
+                  pointer.color, 0.8 + Math.random() * 2.2 + Math.min(1.5, dist / 60), 1.4 + Math.random() * 1.6);
+              }
+            }
+            // The colour drifts slowly through the palette as you move.
+            if (Math.random() < dist / 800) pointer.color = pickColor();
+          }
+          pointer.px = pointer.x; pointer.py = pointer.y;
+        }
+
+        // A slow ambient plume so the page breathes when left alone.
+        ambientClock += dt;
+        if (ambientClock > 0.08) {
+          ambientClock = 0;
+          const x = W * (0.5 + 0.45 * Math.sin(t * 0.13) * Math.cos(t * 0.07));
+          const y = H * (0.5 + 0.4 * Math.sin(t * 0.11 + 1.3));
+          addStrand(x, y, Math.sin(t * 0.7) * 40, Math.cos(t * 0.5) * 40 - 20,
+            Math.floor(t / 7) % PALETTE.length, 0.8 + Math.random() * 1.4, 3 + Math.random() * 2);
+        }
+
+        const decay = Math.pow(0.12, dt);
+        for (let k = 0; k < vx.length; k++) { vx[k] *= decay; vy[k] *= decay; }
+
+        // Dissolve what was drawn before, so trails linger then vanish.
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.globalCompositeOperation = 'destination-out';
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = `rgba(0,0,0,${Math.min(1, FADE_PER_SEC * dt)})`;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        ctx.setTransform(SCALE, 0, 0, SCALE, 0, 0);
+        ctx.lineCap = 'round';
+
+        for (let i = strands.length - 1; i >= 0; i--) {
+          const s = strands[i];
+          s.age += dt;
+          if (s.age >= s.life || s.x < -100 || s.y < -100 || s.x > W + 100 || s.y > H + 100) {
+            strands.splice(i, 1);
+            continue;
+          }
+          const k = cellIndex(s.x, s.y);
+          // Curl: turn the velocity sideways a little each frame, plus a
+          // shared swirl so neighbouring strands braid together.
+          const swirlX = Math.sin(s.y * 0.009 + t * 0.6) * 22;
+          const swirlY = Math.cos(s.x * 0.009 - t * 0.5) * 22 - 10;  // smoke rises
+          const turn = s.curl * dt;
+          const cos = Math.cos(turn), sin = Math.sin(turn);
+          const rx = s.dx * cos - s.dy * sin, ry = s.dx * sin + s.dy * cos;
+          const drag = Math.pow(0.35, dt);
+          s.dx = rx * drag + (vx[k] + swirlX) * (1 - drag);
+          s.dy = ry * drag + (vy[k] + swirlY) * (1 - drag);
+
+          const ox = s.x, oy = s.y;
+          s.x += s.dx * dt;
+          s.y += s.dy * dt;
+
+          const p = s.age / s.life;
+          const fade = p < 0.08 ? p / 0.08 : 1 - (p - 0.08) / 0.92;
+          const c = PALETTE[s.color];
+          const w = s.width * (1 - p * 0.6);
+
+          // Body: the strand itself, multiplied so crossings deepen.
+          ctx.globalCompositeOperation = 'multiply';
+          ctx.strokeStyle = rgba(c.rgb, 0.55 * fade);
+          ctx.lineWidth = w;
+          ctx.beginPath();
+          ctx.moveTo(ox, oy);
+          ctx.lineTo(s.x, s.y);
+          ctx.stroke();
+
+          // Shine: a bright satin core along the fresh part of the strand.
+          if (p < 0.6) {
+            ctx.globalCompositeOperation = 'source-over';
+            ctx.strokeStyle = rgba(c.sheen, 0.8 * (1 - p / 0.6) * fade);
+            ctx.lineWidth = Math.max(0.5, w * 0.35);
+            ctx.beginPath();
+            ctx.moveTo(ox, oy);
+            ctx.lineTo(s.x, s.y);
+            ctx.stroke();
+          }
+
+          // Haze: an occasional soft puff behind the strands for volume.
+          if (Math.random() < 0.05) {
+            const r = 18 + w * 8;
+            ctx.globalCompositeOperation = 'multiply';
+            ctx.globalAlpha = 0.35 * fade;
+            ctx.drawImage(haze[s.color], s.x - r, s.y - r, r * 2, r * 2);
+            ctx.globalAlpha = 1;
+          }
+        }
+
+        rafId = requestAnimationFrame(frame);
+      }
+
+      resize();
+      start();
     })();
   </script>
 </body>
