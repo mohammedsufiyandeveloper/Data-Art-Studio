@@ -1753,7 +1753,7 @@ function hueForTemp(tempC, anchors) {
  * weather scene costs no extra rate limit over the flight scene.
  *
  * The key never reaches the browser — /api/wind proxies it server-side (see
- * server.js and api/wind.js), reading WEATHERAPI_KEY from the environment.
+ * api/wind.js and vite.config.js), reading WEATHERAPI_KEY from the environment.
  */
 async function fetchReading(endpoint) {
   const res = await fetch(endpoint);

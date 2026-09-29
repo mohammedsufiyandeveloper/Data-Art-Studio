@@ -1,19 +1,21 @@
 import { resolve } from "node:path";
 import { defineConfig, loadEnv } from "vite";
 import attendance from "./api/attendance.js";
+import wind from "./api/wind.js";
 
 // Serves the Vercel functions in api/ from the Vite dev and preview servers,
-// so /api/attendance behaves the same locally as when deployed.
+// so /api/attendance and /api/wind behave the same locally as when deployed.
 function apiRoutes() {
   const mount = (server) => {
     server.middlewares.use("/api/attendance", (req, res) => attendance(req, res));
+    server.middlewares.use("/api/wind", (req, res) => wind(req, res));
   };
   return { name: "api-routes", configureServer: mount, configurePreviewServer: mount };
 }
 
 export default defineConfig(({ mode }) => {
   // The api/ handlers read process.env; locally those values live in .env.
-  const env = loadEnv(mode, process.cwd(), "TUSKER_");
+  const env = loadEnv(mode, process.cwd(), ["TUSKER_", "WEATHERAPI_"]);
   for (const [name, value] of Object.entries(env)) {
     if (!(name in process.env)) process.env[name] = value;
   }
