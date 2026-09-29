@@ -3,6 +3,7 @@ dist/
 
 # Secrets and local tooling
 .env*
+!.env.example
 .vercel
 .agents/
 .codex/
@@ -12,3 +13,6 @@ Thumbs.db
 # Videos live in the Cloudflare R2 bucket (data-art), never in this repo.
 *.mp4
 *.mov
+
+.vercel
+.env*

@@ -172,6 +172,10 @@
       --lp-line: #e6e6e6;
       --lp-raise: 0 10px 22px -8px rgba(0, 0, 0, 0.22), 0 2px 4px rgba(0, 0, 0, 0.06);
       --lp-raise-soft: 0 18px 40px -18px rgba(0, 0, 0, 0.22), inset 0 1px 0 #ffffff;
+      /* One unit drives every landing size so the layout scales as a whole:
+         1px on a 1440x900 viewport, limited by whichever side is tighter. */
+      --u: clamp(0.55px, min(100vw / 1440, 100vh / 900), 3px);
+      --u: clamp(0.55px, min(100vw / 1440, 100dvh / 900), 3px);
       padding: 0;
       background: var(--lp-bg);
       font-family: 'Manrope', 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
@@ -180,21 +184,22 @@
 
     .landing {
       min-height: 100vh;
+      min-height: 100dvh;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      padding: 72px 28px 48px;
+      padding: calc(40 * var(--u)) calc(28 * var(--u)) calc(32 * var(--u));
     }
 
     .landing-header {
       text-align: center;
-      margin-bottom: 52px;
+      margin-bottom: calc(36 * var(--u));
     }
 
     .landing-kicker {
       margin: 0;
-      font-size: clamp(34px, 4vw, 48px);
+      font-size: calc(48 * var(--u));
       font-weight: 700;
       letter-spacing: -0.01em;
       line-height: 1.05;
@@ -207,45 +212,45 @@
     }
 
     .landing-title {
-      margin: 10px 0 0;
-      font-size: clamp(24px, 2.6vw, 33px);
+      margin: calc(10 * var(--u)) 0 0;
+      font-size: calc(33 * var(--u));
       font-weight: 500;
       letter-spacing: -0.01em;
     }
 
     .landing-sub {
-      margin: 8px 0 0;
-      font-size: 17px;
+      margin: calc(8 * var(--u)) 0 0;
+      font-size: calc(17 * var(--u));
       color: var(--lp-muted);
     }
 
     .lp-shell {
-      width: min(1384px, 100%);
+      width: min(calc(1384 * var(--u)), 100%);
       display: grid;
-      grid-template-columns: minmax(200px, 248px) minmax(0, 1fr) minmax(240px, 310px);
+      grid-template-columns: minmax(calc(200 * var(--u)), calc(248 * var(--u))) minmax(0, 1fr) minmax(calc(240 * var(--u)), calc(310 * var(--u)));
       grid-template-areas: "data preview art";
       align-items: start;
-      gap: 32px;
-      padding: 80px 36px 40px;
+      gap: calc(32 * var(--u));
+      padding: calc(48 * var(--u)) calc(36 * var(--u)) calc(40 * var(--u));
       background: linear-gradient(180deg, #fbfbfb 0%, #f4f4f4 100%);
       border: 1px solid #ededed;
-      border-radius: 32px;
+      border-radius: calc(32 * var(--u));
       box-shadow: var(--lp-raise-soft);
     }
 
     .lp-panel {
       background: linear-gradient(180deg, #fdfdfd 0%, #f5f5f5 100%);
       border: 1px solid #ececec;
-      border-radius: 30px;
+      border-radius: calc(30 * var(--u));
       box-shadow: var(--lp-raise-soft);
       overflow: hidden;
     }
 
     .lp-panel-title {
       margin: 0;
-      padding: 26px 20px 22px;
+      padding: calc(26 * var(--u)) calc(20 * var(--u)) calc(22 * var(--u));
       text-align: center;
-      font-size: 19px;
+      font-size: calc(19 * var(--u));
       font-weight: 500;
       letter-spacing: 0.02em;
       text-transform: uppercase;
@@ -264,18 +269,18 @@
     .data-list {
       display: flex;
       flex-direction: column;
-      gap: 14px;
-      padding: 18px 32px 48px;
+      gap: calc(14 * var(--u));
+      padding: calc(18 * var(--u)) calc(32 * var(--u)) calc(48 * var(--u));
     }
 
     .data-item {
       display: flex;
       align-items: center;
-      gap: 14px;
-      height: 50px;
-      padding: 0 16px;
+      gap: calc(14 * var(--u));
+      height: calc(50 * var(--u));
+      padding: 0 calc(16 * var(--u));
       background: #ffffff;
-      border-radius: 14px;
+      border-radius: calc(14 * var(--u));
       box-shadow: var(--lp-raise);
       cursor: pointer;
       user-select: none;
@@ -289,14 +294,14 @@
     .data-item:focus-visible,
     .art-card:focus-visible,
     .lp-generate:focus-visible {
-      outline: 2px solid #111;
-      outline-offset: 3px;
+      outline: calc(2 * var(--u)) solid #111;
+      outline-offset: calc(3 * var(--u));
     }
 
     .data-icon {
       display: flex;
-      width: 22px;
-      height: 22px;
+      width: calc(22 * var(--u));
+      height: calc(22 * var(--u));
     }
 
     .data-icon svg {
@@ -306,7 +311,7 @@
     }
 
     .data-name {
-      font-size: 17px;
+      font-size: calc(17 * var(--u));
       font-weight: 500;
       letter-spacing: 0.01em;
       text-transform: uppercase;
@@ -324,7 +329,7 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 28px;
+      gap: calc(28 * var(--u));
       min-width: 0;
     }
 
@@ -336,8 +341,8 @@
       display: grid;
       grid-template-columns: 1fr auto 1fr;
       align-items: center;
-      gap: 12px;
-      padding: 20px 28px 16px;
+      gap: calc(12 * var(--u));
+      padding: calc(20 * var(--u)) calc(28 * var(--u)) calc(16 * var(--u));
       border-bottom: 1px solid var(--lp-line);
     }
 
@@ -345,26 +350,26 @@
       justify-self: start;
       display: inline-flex;
       align-items: center;
-      gap: 9px;
-      padding: 8px 14px;
+      gap: calc(9 * var(--u));
+      padding: calc(8 * var(--u)) calc(14 * var(--u));
       background: #ffffff;
-      border-radius: 14px;
+      border-radius: calc(14 * var(--u));
       box-shadow: var(--lp-raise);
-      font-size: 16px;
+      font-size: calc(16 * var(--u));
       font-weight: 500;
       white-space: nowrap;
     }
 
     .lp-badge::before {
       content: "";
-      width: 8px;
-      height: 8px;
+      width: calc(8 * var(--u));
+      height: calc(8 * var(--u));
       border-radius: 50%;
       background: #111;
     }
 
     .lp-preview-title {
-      font-size: 17px;
+      font-size: calc(17 * var(--u));
       font-weight: 500;
       text-transform: uppercase;
       white-space: nowrap;
@@ -373,7 +378,7 @@
     .lp-preview-blurb {
       justify-self: end;
       text-align: right;
-      font-size: 16px;
+      font-size: calc(16 * var(--u));
       color: var(--lp-muted);
     }
 
@@ -393,8 +398,8 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 10px;
-      font-size: 14px;
+      gap: calc(10 * var(--u));
+      font-size: calc(14 * var(--u));
       color: var(--lp-muted);
       pointer-events: none;
       transition: opacity 0.3s ease;
@@ -402,10 +407,10 @@
 
     .lp-loading::before {
       content: "";
-      width: 16px;
-      height: 16px;
+      width: calc(16 * var(--u));
+      height: calc(16 * var(--u));
       border-radius: 50%;
-      border: 2px solid #d6d6d6;
+      border: calc(2 * var(--u)) solid #d6d6d6;
       border-top-color: #111;
       animation: lp-spin 0.8s linear infinite;
     }
@@ -421,7 +426,7 @@
     }
 
     .lp-video-frame.has-error .lp-loading {
-      padding: 0 24px;
+      padding: 0 calc(24 * var(--u));
       text-align: center;
       color: #b91c1c;
     }
@@ -453,16 +458,16 @@
       grid-template-columns: auto auto 1fr;
       grid-template-rows: auto auto;
       align-items: center;
-      column-gap: 10px;
-      row-gap: 10px;
-      padding: 28px 28px 22px;
+      column-gap: calc(10 * var(--u));
+      row-gap: calc(10 * var(--u));
+      padding: calc(28 * var(--u)) calc(28 * var(--u)) calc(22 * var(--u));
       background: linear-gradient(180deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.7) 100%);
     }
 
     .lp-play-btn {
       display: flex;
-      width: 26px;
-      height: 26px;
+      width: calc(26 * var(--u));
+      height: calc(26 * var(--u));
       padding: 0;
       align-items: center;
       justify-content: center;
@@ -473,8 +478,8 @@
     }
 
     .lp-play-btn svg {
-      width: 22px;
-      height: 22px;
+      width: calc(22 * var(--u));
+      height: calc(22 * var(--u));
       fill: currentColor;
     }
 
@@ -491,7 +496,7 @@
     }
 
     .lp-time {
-      font-size: 14px;
+      font-size: calc(14 * var(--u));
       font-variant-numeric: tabular-nums;
       color: #111;
     }
@@ -499,7 +504,7 @@
     .lp-timeline {
       position: relative;
       grid-column: 1 / -1;
-      height: 14px;
+      height: calc(14 * var(--u));
       display: flex;
       align-items: center;
       cursor: pointer;
@@ -511,37 +516,37 @@
       left: 0;
       right: 0;
       top: 50%;
-      height: 3px;
+      height: calc(3 * var(--u));
       transform: translateY(-50%);
       background: rgba(17, 17, 17, 0.18);
     }
 
     .lp-timeline-fill {
       position: relative;
-      height: 3px;
+      height: calc(3 * var(--u));
       width: 0%;
       background: #111;
     }
 
     .lp-play-btn:focus-visible,
     .lp-timeline:focus-visible {
-      outline: 2px solid #111;
-      outline-offset: 2px;
+      outline: calc(2 * var(--u)) solid #111;
+      outline-offset: calc(2 * var(--u));
     }
 
     .lp-generate {
-      min-width: 250px;
-      height: 50px;
-      padding: 0 32px;
+      min-width: calc(250 * var(--u));
+      height: calc(50 * var(--u));
+      padding: 0 calc(32 * var(--u));
       font: inherit;
-      font-size: 17px;
+      font-size: calc(17 * var(--u));
       font-weight: 500;
       letter-spacing: 0.02em;
       text-transform: uppercase;
       color: var(--lp-ink);
       background: #ffffff;
       border: 0;
-      border-radius: 14px;
+      border-radius: calc(14 * var(--u));
       box-shadow: var(--lp-raise);
       cursor: pointer;
       transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
@@ -565,10 +570,10 @@
     .cards-column {
       display: flex;
       flex-direction: column;
-      gap: 14px;
-      max-height: 470px;
+      gap: calc(14 * var(--u));
+      max-height: calc(470 * var(--u));
       overflow-y: auto;
-      padding: 30px 20px 36px;
+      padding: calc(30 * var(--u)) calc(20 * var(--u)) calc(36 * var(--u));
       scrollbar-width: thin;
       scrollbar-color: #d4d4d4 transparent;
     }
@@ -576,12 +581,12 @@
     .art-card {
       display: flex;
       align-items: center;
-      gap: 20px;
+      gap: calc(20 * var(--u));
       flex: none;
-      height: 62px;
-      padding: 0 18px 0 24px;
+      height: calc(62 * var(--u));
+      padding: 0 calc(18 * var(--u)) 0 calc(24 * var(--u));
       background: #ffffff;
-      border-radius: 14px;
+      border-radius: calc(14 * var(--u));
       box-shadow: var(--lp-raise);
       cursor: pointer;
       user-select: none;
@@ -593,12 +598,12 @@
     }
 
     .art-thumb {
-      width: 54px;
-      height: 32px;
+      width: calc(54 * var(--u));
+      height: calc(32 * var(--u));
       flex: none;
       overflow: hidden;
-      border: 2px solid #d9d9d9;
-      border-radius: 3px;
+      border: calc(2 * var(--u)) solid #d9d9d9;
+      border-radius: calc(3 * var(--u));
       background: #eee;
     }
 
@@ -611,7 +616,7 @@
 
     .art-name {
       flex: 1;
-      font-size: 17px;
+      font-size: calc(17 * var(--u));
       font-weight: 500;
       text-transform: uppercase;
       white-space: nowrap;
@@ -620,14 +625,14 @@
     .art-view {
       display: inline-flex;
       align-items: center;
-      gap: 6px;
-      font-size: 12px;
+      gap: calc(6 * var(--u));
+      font-size: calc(12 * var(--u));
       color: var(--lp-muted);
     }
 
     .art-view svg {
-      width: 12px;
-      height: 12px;
+      width: calc(12 * var(--u));
+      height: calc(12 * var(--u));
       fill: none;
       stroke: currentColor;
       stroke-width: 2;
@@ -651,6 +656,10 @@
 
     /* Tablet: Data and Art side by side, preview + Generate below. */
     @media (max-width: 1080px) {
+      #page1 {
+        --u: 1px;
+      }
+
       .lp-shell {
         grid-template-columns: 1fr 1fr;
         grid-template-areas: "data art" "preview preview";
@@ -1278,10 +1287,20 @@
       overflow: hidden;
     }
 
+    /* Full-screen output pages must never scroll the document. */
+    html.output-locked,
+    html.output-locked body {
+      height: 100%;
+      min-height: 0;
+      overflow: hidden;
+      overscroll-behavior: none;
+    }
+
     .weather-page.active {
       position: fixed;
       inset: 0;
-      min-height: 100vh;
+      min-height: 0;
+      height: 100%;
       padding: 0;
       z-index: 20;
     }
@@ -1571,6 +1590,71 @@
       font-family: var(--wx-mono);
       font-size: 8.5px;
       color: var(--wx-faint);
+    }
+
+    /* One full-screen page serves Weather and Attendance; data-mode on the
+       page picks which HUD panel shows. */
+    .weather-page[data-mode="attendance"] .wx-weather-only,
+    .weather-page:not([data-mode="attendance"]) .wx-attendance-only {
+      display: none;
+    }
+
+    /* Tusker's attendance palette (emerald / amber / rose-600). The art is
+       coloured with the same values via the editor's colour inputs. */
+    .weather-page {
+      --att-present: #059669;
+      --att-late: #d97706;
+      --att-absent: #e11d48;
+    }
+
+    .wx-stats.wx-stats-3 {
+      grid-template-columns: repeat(3, 1fr);
+    }
+
+    .wx-stats-3 .wx-stat:nth-child(n) {
+      padding: 0 4px;
+      border: 0;
+    }
+
+    .wx-stats-3 .wx-stat+.wx-stat {
+      border-left: 1px solid var(--wx-stroke-soft);
+    }
+
+    .wx-stat-value.present {
+      color: var(--att-present);
+    }
+
+    .wx-stat-value.late {
+      color: var(--att-late);
+    }
+
+    .wx-stat-value.absent {
+      color: var(--att-absent);
+    }
+
+    .att-share-bar {
+      display: flex;
+      height: 6px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: rgba(15, 23, 32, 0.08);
+    }
+
+    .att-share-bar span {
+      width: 0;
+      transition: width 0.6s ease;
+    }
+
+    .att-share-bar .present {
+      background: var(--att-present);
+    }
+
+    .att-share-bar .late {
+      background: var(--att-late);
+    }
+
+    .att-share-bar .absent {
+      background: var(--att-absent);
     }
 
     .wx-manual {
@@ -2721,11 +2805,11 @@
 
       <div class="controls attendance-only">
         <div class="color-box"><span class="absent-hint">Absent</span><input type="color" id="colorAbsent"
-            value="#ae1e3b"></div>
-        <div class="color-box"><span class="late-hint">Late</span><input type="color" id="colorLate" value="#0e68a0">
+            value="#e11d48"></div>
+        <div class="color-box"><span class="late-hint">Late</span><input type="color" id="colorLate" value="#d97706">
         </div>
         <div class="color-box"><span class="present-hint">Present</span><input type="color" id="colorPresent"
-            value="#078f05"></div>
+            value="#059669"></div>
       </div>
 
       <div class="controls attendance-only" style="margin-top:14px;">
@@ -2847,13 +2931,13 @@
       title="Flight Garden live traffic visualization" allow="autoplay; fullscreen"></iframe>
   </div>
 
-  <!-- ====== PAGE 4 — WEATHER (full-screen output) ====== -->
-  <div id="pageWeather" class="page weather-page">
+  <!-- ====== PAGE 4 — FULL-SCREEN OUTPUT (Weather / Attendance) ====== -->
+  <div id="pageWeather" class="page weather-page" data-mode="weather">
     <!-- #output is moved in here while this page is open (see goToPage). -->
     <div class="weather-stage" id="weatherStage"></div>
 
     <div class="wx-hud hud-active" id="weatherHud">
-      <aside class="wx-panel">
+      <aside class="wx-panel wx-weather-only">
         <section class="wx-block">
           <div class="wx-head">
             <span class="wx-live-dot" aria-hidden="true"></span>
@@ -2913,6 +2997,47 @@
           </button>
         </section>
       </aside>
+
+      <aside class="wx-panel wx-attendance-only">
+        <section class="wx-block">
+          <div class="wx-head">
+            <span class="wx-live-dot" aria-hidden="true"></span>
+            <h1 class="wx-title">Live Attendance</h1>
+            <span class="weather-source-status" id="attendanceSourceStatus">Connecting</span>
+          </div>
+          <p class="wx-sub" id="attendanceHudArt">ART 1</p>
+          <p class="wx-sub" id="attendanceDate" style="margin-bottom:0;">Today</p>
+        </section>
+
+        <section class="wx-block">
+          <div class="wx-stats wx-stats-3">
+            <div class="wx-stat">
+              <span class="wx-stat-value present" id="attendancePresentValue">--</span>
+              <span class="wx-stat-label">Present</span>
+            </div>
+            <div class="wx-stat">
+              <span class="wx-stat-value late" id="attendanceLateValue">--</span>
+              <span class="wx-stat-label">Late</span>
+            </div>
+            <div class="wx-stat">
+              <span class="wx-stat-value absent" id="attendanceAbsentValue">--</span>
+              <span class="wx-stat-label">Absent</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="wx-block">
+          <div class="att-share-bar" aria-hidden="true">
+            <span class="present" id="attendanceBarPresent"></span>
+            <span class="late" id="attendanceBarLate"></span>
+            <span class="absent" id="attendanceBarAbsent"></span>
+          </div>
+          <div class="wx-scale-labels">
+            <span id="attendanceTotal">-- members</span>
+            <span id="attendanceOther"></span>
+          </div>
+        </section>
+      </aside>
     </div>
 
     <div class="wx-controls">
@@ -2927,9 +3052,9 @@
     </div>
 
     <div class="wx-titlecard" id="weatherTitlecard">
-      <span class="wx-tc-kicker">Weather</span>
+      <span class="wx-tc-kicker" id="weatherTcKicker">Weather</span>
       <span class="wx-tc-line" id="weatherTcLine">Live weather, rendered as art</span>
-      <span class="wx-tc-sub">Temperature colours the art &middot; Wind sets its pace</span>
+      <span class="wx-tc-sub" id="weatherTcSub">Temperature colours the art &middot; Wind sets its pace</span>
     </div>
   </div>
 
@@ -2991,6 +3116,7 @@
           if (page) page.classList.toggle('active', Number(key) === n);
         });
         window.scrollTo(0, 0);
+        document.documentElement.classList.toggle('output-locked', n === 3 || n === 4);
 
         // One WebGL canvas renders both views: it sits full-bleed on the
         // weather page and back in the editor's output panel otherwise.
@@ -3006,6 +3132,7 @@
         } else {
           pausePlayback();
           stopWeatherPolling();
+          stopAttendancePolling();
         }
         if (n === 3) startFlightSimulation();
         currentPage = n;
@@ -3057,13 +3184,20 @@
         preloaded = false;
         preloading = false;
 
+        // Weather and Attendance share the full-screen output page.
+        pageWeather.dataset.mode = activeDataMode;
         if (activeDataMode === 'weather') {
           weatherHudArt.textContent = artTitle;
+          weatherTcKicker.textContent = 'Weather';
           weatherTcLine.textContent = 'Live weather, rendered as ' + artTitle;
-          goToPage(4);
+          weatherTcSub.innerHTML = 'Temperature colours the art &middot; Wind sets its pace';
         } else {
-          goToPage(2);
+          attendanceHudArt.textContent = artTitle;
+          weatherTcKicker.textContent = 'Attendance';
+          weatherTcLine.textContent = "Today's attendance, rendered as " + artTitle;
+          weatherTcSub.innerHTML = 'Green is present &middot; Orange is late &middot; Red is absent';
         }
+        goToPage(4);
       }
 
       function updateArtFilter() {
@@ -3235,7 +3369,20 @@
       const weatherHudToggleText = document.getElementById('weatherHudToggleText');
       const weatherBackBtn = document.getElementById('weatherBackBtn');
       const weatherTitlecard = document.getElementById('weatherTitlecard');
+      const weatherTcKicker = document.getElementById('weatherTcKicker');
       const weatherTcLine = document.getElementById('weatherTcLine');
+      const weatherTcSub = document.getElementById('weatherTcSub');
+      const attendanceHudArt = document.getElementById('attendanceHudArt');
+      const attendanceSourceStatus = document.getElementById('attendanceSourceStatus');
+      const attendanceDate = document.getElementById('attendanceDate');
+      const attendancePresentValue = document.getElementById('attendancePresentValue');
+      const attendanceLateValue = document.getElementById('attendanceLateValue');
+      const attendanceAbsentValue = document.getElementById('attendanceAbsentValue');
+      const attendanceBarPresent = document.getElementById('attendanceBarPresent');
+      const attendanceBarLate = document.getElementById('attendanceBarLate');
+      const attendanceBarAbsent = document.getElementById('attendanceBarAbsent');
+      const attendanceTotal = document.getElementById('attendanceTotal');
+      const attendanceOther = document.getElementById('attendanceOther');
       const weatherLocationSelect = document.getElementById('weatherLocationSelect');
       const weatherSourceStatus = document.getElementById('weatherSourceStatus');
       const weatherTempValue = document.getElementById('weatherTempValue');
@@ -3426,17 +3573,104 @@
         weatherPollTimer = setInterval(pollWeather, WEATHER_POLL_MS);
       }
 
+      // ---- Attendance: today's headcounts from Tusker via api/attendance.js ----
+      const ATTENDANCE_POLL_MS = 5 * 60 * 1000;
+      let attendancePollTimer = null;
+      let attendanceRequestToken = 0;
+      let lastAttendanceReading = null;
+
+      function setAttendanceStatus(text, state) {
+        attendanceSourceStatus.textContent = text;
+        attendanceSourceStatus.className = 'weather-source-status' + (state ? ' ' + state : '');
+      }
+
+      function applyAttendanceReading(reading) {
+        // The three counts are exclusive (present means on time), and each
+        // group gets its own zone of the art.
+        const late = reading.late;
+        const absent = reading.absent;
+        const onTime = reading.present;
+        const counted = onTime + late + absent;
+
+        attendancePresentValue.textContent = onTime;
+        attendanceLateValue.textContent = late;
+        attendanceAbsentValue.textContent = absent;
+        attendanceTotal.textContent = reading.total + ' members';
+        const other = [];
+        if (reading.onLeave) other.push(reading.onLeave + ' on leave');
+        if (reading.halfDay) other.push(reading.halfDay + ' half day');
+        attendanceOther.textContent = other.join(' · ');
+        attendanceDate.textContent = reading.date
+          ? new Date(reading.date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })
+          : 'Today';
+
+        const share = n => (counted > 0 ? (n / counted) * 100 : 0);
+        attendanceBarPresent.style.width = share(onTime) + '%';
+        attendanceBarLate.style.width = share(late) + '%';
+        attendanceBarAbsent.style.width = share(absent) + '%';
+
+        // Each group's share of the team becomes its share of the art's
+        // velocity pixels: absent the stillest, present the most active.
+        if (counted > 0) {
+          const present = Math.round(share(onTime));
+          const lateZone = Math.round(share(late));
+          setAttendanceZones(100 - present - lateZone, lateZone, present);
+        }
+      }
+
+      async function fetchAttendanceReading() {
+        const response = await fetch('api/attendance', { cache: 'no-store' });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload.error || `Attendance HTTP ${response.status}`);
+        const counts = ['total', 'present', 'late', 'absent'];
+        if (!counts.every(key => Number.isFinite(payload[key]))) throw new Error('Attendance response is incomplete');
+        return payload;
+      }
+
+      async function pollAttendance() {
+        if (activeDataMode !== 'attendance') return;
+        const token = ++attendanceRequestToken;
+        setAttendanceStatus('Connecting', '');
+        try {
+          const reading = await fetchAttendanceReading();
+          if (token !== attendanceRequestToken || activeDataMode !== 'attendance') return;
+          lastAttendanceReading = reading;
+          applyAttendanceReading(reading);
+          setAttendanceStatus('Live', 'live');
+        } catch (error) {
+          console.warn('[Data Art Studio] Live attendance unavailable; keeping the last reading.', error);
+          if (token === attendanceRequestToken && activeDataMode === 'attendance') {
+            setAttendanceStatus(lastAttendanceReading ? 'Offline - last reading' : 'Offline', 'error');
+          }
+        }
+      }
+
+      function stopAttendancePolling() {
+        if (attendancePollTimer) clearInterval(attendancePollTimer);
+        attendancePollTimer = null;
+        attendanceRequestToken++;
+      }
+
+      function startAttendancePolling() {
+        stopAttendancePolling();
+        if (lastAttendanceReading) applyAttendanceReading(lastAttendanceReading);
+        pollAttendance();
+        attendancePollTimer = setInterval(pollAttendance, ATTENDANCE_POLL_MS);
+      }
+
       function configureStudioDataMode(mode) {
         const isWeather = mode === 'weather';
         document.body.dataset.studioData = mode;
 
         if (isWeather) {
+          stopAttendancePolling();
           weatherManualReading = null;
           weatherRealtimeBtn.disabled = true;
           startWeatherPolling();
         } else {
           stopWeatherPolling();
           setAllPlaybackRates(1);
+          startAttendancePolling();
         }
       }
 
@@ -4153,6 +4387,11 @@
         rangeAbsentSld.value = wAbsent; rangeLateSld.value = wLate; rangePresentSld.value = wPresent;
         rangeAbsentVal.textContent = wAbsent + '%'; rangeLateVal.textContent = wLate + '%'; rangePresentVal.textContent = wPresent + '%';
         updateRangeBar();
+      }
+
+      function setAttendanceZones(absent, late, present) {
+        wAbsent = absent; wLate = late; wPresent = present;
+        updateSlidersUI();
       }
 
       function adjustZones(changed, nv) {
