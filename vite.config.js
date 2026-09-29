@@ -26,6 +26,10 @@ export default defineConfig(({ mode }) => {
     publicDir: "public",
     plugins: [apiRoutes()],
     server: {
+      // The R2 video bucket's CORS rule only allows this origin, so fail
+      // loudly instead of drifting to another port where videos can't load.
+      port: 5173,
+      strictPort: true,
       open: "/velocitymapping.html",
     },
     preview: {
