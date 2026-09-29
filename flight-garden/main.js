@@ -1668,7 +1668,7 @@ const R2_PUBLIC_BASE = "https://pub-085468ffd2bd40868c645940c8033bb2.r2.dev";
 
 /** Object names in the data-art R2 bucket (shared with the Data Art Studio). */
 const VIDEO_PATHS = {
-  art1: "garden.mp4",
+  art1: "4k_render_final_001.mp4",
   art1g: "art_1_grayscale.mp4",
   art1v: "art_1_velocity.mp4",
   art2g: "art_2_grayscale.mp4",
