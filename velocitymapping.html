@@ -3585,14 +3585,16 @@
       }
 
       function applyAttendanceReading(reading) {
-        // The three counts are exclusive (present means on time), and each
-        // group gets its own zone of the art.
+        // The API's counts are exclusive (present means on time). Late people
+        // still came in, so Present includes them. The art and the share bar
+        // are sized by these three displayed figures, so the biggest number
+        // always gets the most colour.
         const late = reading.late;
         const absent = reading.absent;
-        const onTime = reading.present;
-        const counted = onTime + late + absent;
+        const present = reading.present + late;
+        const counted = present + late + absent;
 
-        attendancePresentValue.textContent = onTime;
+        attendancePresentValue.textContent = present;
         attendanceLateValue.textContent = late;
         attendanceAbsentValue.textContent = absent;
         attendanceTotal.textContent = reading.total + ' members';
@@ -3605,16 +3607,16 @@
           : 'Today';
 
         const share = n => (counted > 0 ? (n / counted) * 100 : 0);
-        attendanceBarPresent.style.width = share(onTime) + '%';
+        attendanceBarPresent.style.width = share(present) + '%';
         attendanceBarLate.style.width = share(late) + '%';
         attendanceBarAbsent.style.width = share(absent) + '%';
 
-        // Each group's share of the team becomes its share of the art's
-        // velocity pixels: absent the stillest, present the most active.
+        // Each group's share becomes its share of the art's coloured pixels:
+        // absent the stillest, present the most active.
         if (counted > 0) {
-          const present = Math.round(share(onTime));
+          const presentZone = Math.round(share(present));
           const lateZone = Math.round(share(late));
-          setAttendanceZones(100 - present - lateZone, lateZone, present);
+          setAttendanceZones(100 - presentZone - lateZone, lateZone, presentZone);
         }
       }
 
@@ -3845,7 +3847,11 @@
         }
       }
 
-      float lum = (vg + vb) * 0.5;
+      // Zone key. The velocity pass is mostly a few flat levels, and a zone
+      // boundary can't split a block of identical values, so the render's own
+      // shading breaks the tie. 0.1 is small enough to keep the velocity
+      // levels in order. Must match ZONE_TIE in computeBoundariesCached.
+      float lum = ((vg + vb) * 0.5 + 0.1 * dot(m, vec3(0.299, 0.587, 0.114))) / 1.1;
       float t1 = smoothstep(u_b1 - u_softRange, u_b1 + u_softRange, lum);
       float t2 = smoothstep(u_b2 - u_softRange, u_b2 + u_softRange, lum);
 
@@ -3991,6 +3997,9 @@
       const histCanvas = document.createElement('canvas');
       histCanvas.width = HIST_W; histCanvas.height = HIST_H;
       const histCtx = histCanvas.getContext('2d', { willReadFrequently: true });
+      const histMainCanvas = document.createElement('canvas');
+      histMainCanvas.width = HIST_W; histMainCanvas.height = HIST_H;
+      const histMainCtx = histMainCanvas.getContext('2d', { willReadFrequently: true });
 
       let colorAbsent = hexToRgb(colorAbsentInput.value);
       let colorLate = hexToRgb(colorLateInput.value);
@@ -4419,24 +4428,44 @@
         resBadge.textContent = PW + ' × ' + PH;
       }
 
-      const HIST = 128;
+      const HIST = 256;
+      // Weight of the render's shading in the zone key (see the shader's lum).
+      const ZONE_TIE = 0.1;
 
       function computeBoundariesCached() {
         if (histFrameCounter++ % HIST_RECOMPUTE_EVERY !== 0) {
           return { b1: cachedB1, b2: cachedB2, softRange: cachedSoftRange };
         }
         const veloSource = primaryIsA ? veloVideo : veloVideoB;
-        try { histCtx.drawImage(veloSource, 0, 0, HIST_W, HIST_H); } catch (e) { return { b1: cachedB1, b2: cachedB2, softRange: cachedSoftRange }; }
-        let imgData;
-        try { imgData = histCtx.getImageData(0, 0, HIST_W, HIST_H); }
-        catch (e) { return { b1: cachedB1, b2: cachedB2, softRange: cachedSoftRange }; }
+        const mainSource = primaryIsA ? mainVideo : mainVideoB;
+        let imgData, mainData;
+        try {
+          histCtx.drawImage(veloSource, 0, 0, HIST_W, HIST_H);
+          histMainCtx.drawImage(mainSource, 0, 0, HIST_W, HIST_H);
+          imgData = histCtx.getImageData(0, 0, HIST_W, HIST_H);
+          mainData = histMainCtx.getImageData(0, 0, HIST_W, HIST_H);
+        } catch (e) { return { b1: cachedB1, b2: cachedB2, softRange: cachedSoftRange }; }
 
         const px = imgData.data;
+        const mpx = mainData.data;
         const hist = new Float32Array(HIST);
-        const total = HIST_W * HIST_H;
-        for (let p = 0; p < total; p++) {
+        // Only pixels the shader actually colours count toward the zones, so
+        // each zone's share matches what shows on screen. Red velocity pixels
+        // are masked out by the shader (same thresholds as setBlendUniforms);
+        // they're the stillest, so counting them would shrink Absent.
+        const redLo = 20 + maskAmt * 60;
+        const redHi = 200 - maskAmt * 150;
+        const gbLimit = 100 + maskAmt * 60;
+        const maskedAbove = redLo + (redHi - redLo) * 0.5;
+        const pixels = HIST_W * HIST_H;
+        let total = 0;
+        for (let p = 0; p < pixels; p++) {
           const i = p * 4;
-          const lum = (px[i + 1] + px[i + 2]) * 0.5 / 255;
+          const r = px[i], g = px[i + 1], b = px[i + 2];
+          if (g < gbLimit && b < gbLimit && r - Math.max(g, b) > maskedAbove) continue;
+          total++;
+          const shade = (0.299 * mpx[i] + 0.587 * mpx[i + 1] + 0.114 * mpx[i + 2]) / 255;
+          const lum = ((g + b) * 0.5 / 255 + ZONE_TIE * shade) / (1 + ZONE_TIE);
           let bin = (lum * HIST) | 0;
           if (bin < 0) bin = 0; else if (bin >= HIST) bin = HIST - 1;
           hist[bin] += 1;
