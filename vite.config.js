@@ -1,13 +1,15 @@
 import { resolve } from "node:path";
 import { defineConfig, loadEnv } from "vite";
 import attendance from "./api/attendance.js";
+import weather from "./api/weather.js";
 import wind from "./api/wind.js";
 
 // Serves the Vercel functions in api/ from the Vite dev and preview servers,
-// so /api/attendance and /api/wind behave the same locally as when deployed.
+// so /api/attendance, /api/weather and /api/wind behave the same locally as when deployed.
 function apiRoutes() {
   const mount = (server) => {
     server.middlewares.use("/api/attendance", (req, res) => attendance(req, res));
+    server.middlewares.use("/api/weather", (req, res) => weather(req, res));
     server.middlewares.use("/api/wind", (req, res) => wind(req, res));
   };
   return { name: "api-routes", configureServer: mount, configurePreviewServer: mount };
@@ -45,6 +47,7 @@ export default defineConfig(({ mode }) => {
         input: {
           studio: resolve(import.meta.dirname, "velocitymapping.html"),
           flightGarden: resolve(import.meta.dirname, "flight-garden/index.html"),
+          worldClock: resolve(import.meta.dirname, "world-clock/index.html"),
         },
       },
     },

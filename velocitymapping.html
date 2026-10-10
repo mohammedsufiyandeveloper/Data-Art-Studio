@@ -277,7 +277,7 @@
       display: flex;
       flex-direction: column;
       gap: calc(14 * var(--u));
-      padding: calc(18 * var(--u)) calc(32 * var(--u)) calc(48 * var(--u));
+      padding: calc(18 * var(--u)) calc(24 * var(--u)) calc(48 * var(--u));
     }
 
     .data-item {
@@ -322,6 +322,7 @@
       font-weight: 500;
       letter-spacing: 0.01em;
       text-transform: uppercase;
+      white-space: nowrap;
     }
 
     .data-item.selected {
@@ -397,6 +398,29 @@
 
     .lp-video-frame {
       overflow: hidden;
+    }
+
+    /* Laid out at full size, then scaled to the frame (see fitClockPreview),
+       so the preview matches the full-screen clock rather than its phone layout. */
+    .lp-clock-preview {
+      position: absolute;
+      top: 0;
+      left: 0;
+      display: none;
+      width: 1920px;
+      height: 1080px;
+      border: 0;
+      transform-origin: 0 0;
+      pointer-events: none;
+    }
+
+    .lp-video-frame.is-clock .lp-clock-preview {
+      display: block;
+    }
+
+    .lp-video-frame.is-clock canvas,
+    .lp-video-frame.is-clock .lp-player {
+      display: none;
     }
 
     .lp-loading {
@@ -2607,6 +2631,15 @@
                 </svg></span>
               <span class="data-name">Attendance</span>
             </div>
+
+            <div class="data-item" id="dataCard4" data-title="World Clock" data-arts="clockMapCard,clockFabricCard"
+              role="radio" tabindex="0" aria-checked="false">
+              <span class="data-icon"><svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path
+                    d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z" />
+                </svg></span>
+              <span class="data-name">World Clock</span>
+            </div>
           </div>
         </section>
 
@@ -2614,7 +2647,7 @@
         <div class="lp-preview-col">
           <section class="lp-panel lp-preview" aria-label="Preview">
             <div class="lp-preview-head">
-              <span class="lp-badge">Video Preview</span>
+              <span class="lp-badge" id="lpBadge">Video Preview</span>
               <span class="lp-preview-title" id="lpPreviewTitle">Garden</span>
               <span class="lp-preview-blurb" id="lpPreviewBlurb">The original flight-garden render</span>
             </div>
@@ -2622,6 +2655,9 @@
               <!-- The preview is rendered through the same colour blend as the output. -->
               <canvas id="lpPreviewCanvas" width="960" height="540"></canvas>
               <div class="lp-loading" id="lpLoading" role="status">Loading preview</div>
+              <!-- World Clock arts preview the live clock instead of a video. -->
+              <iframe id="lpClockPreview" class="lp-clock-preview" title="World Clock preview" tabindex="-1"
+                aria-hidden="true"></iframe>
               <video id="lpPreviewVideo" class="secondary-video" muted loop playsinline preload="auto"
                 crossorigin="anonymous"></video>
               <video id="lpPreviewVelo" class="secondary-video" muted loop playsinline preload="auto"
@@ -2695,6 +2731,26 @@
               data-sh="-0.8" role="radio" tabindex="0" aria-checked="false">
               <span class="art-thumb"><img src="assets/art_4_thumb.jpg" alt=""></span>
               <span class="art-name">ART 4</span>
+              <span class="art-view">View <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M5 12h14M13 6l6 6-6 6" />
+                </svg></span>
+            </div>
+
+            <div class="art-card" id="clockMapCard" data-title="World Map" data-clock-art="map"
+              data-blurb="Each city's local time and weather over the world map" role="radio" tabindex="0"
+              aria-checked="false">
+              <span class="art-thumb"><img src="assets/clock_map_thumb.jpg" alt=""></span>
+              <span class="art-name">World Map</span>
+              <span class="art-view">View <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M5 12h14M13 6l6 6-6 6" />
+                </svg></span>
+            </div>
+
+            <div class="art-card" id="clockFabricCard" data-title="Fabric" data-clock-art="fabric"
+              data-blurb="Each city's local time and weather over flowing fabric" role="radio" tabindex="0"
+              aria-checked="false">
+              <span class="art-thumb"><img src="assets/clock_fabric_thumb.jpg" alt=""></span>
+              <span class="art-name">Fabric</span>
               <span class="art-view">View <svg viewBox="0 0 24 24" aria-hidden="true">
                   <path d="M5 12h14M13 6l6 6-6 6" />
                 </svg></span>
@@ -2939,6 +2995,11 @@
       title="Flight Garden live traffic visualization" allow="autoplay; fullscreen"></iframe>
   </div>
 
+  <!-- ====== PAGE 5 — WORLD CLOCK ====== -->
+  <div id="pageClock" class="page flight-page">
+    <iframe id="worldClockFrame" class="flight-garden-frame" title="World Clock" allow="fullscreen"></iframe>
+  </div>
+
   <!-- ====== PAGE 4 — FULL-SCREEN OUTPUT (Weather / Attendance) ====== -->
   <div id="pageWeather" class="page weather-page" data-mode="weather">
     <!-- #output is moved in here while this page is open (see goToPage). -->
@@ -3117,15 +3178,16 @@
       let currentPage = 0;
       let activeDataMode = 'attendance';
 
-      // 1 = landing, 2 = editor, 3 = Flight Garden, 4 = Weather (full screen)
+      // 1 = landing, 2 = editor, 3 = Flight Garden, 4 = Weather (full screen),
+      // 5 = World Clock
       function goToPage(n) {
         if (n === currentPage) return;
-        const pages = { 1: page1, 2: page2, 3: pageFlight, 4: pageWeather };
+        const pages = { 1: page1, 2: page2, 3: pageFlight, 4: pageWeather, 5: pageClock };
         Object.entries(pages).forEach(([key, page]) => {
           if (page) page.classList.toggle('active', Number(key) === n);
         });
         window.scrollTo(0, 0);
-        document.documentElement.classList.toggle('output-locked', n === 3 || n === 4);
+        document.documentElement.classList.toggle('output-locked', n === 3 || n === 4 || n === 5);
 
         // One WebGL canvas renders both views: it sits full-bleed on the
         // weather page and back in the editor's output panel otherwise.
@@ -3147,6 +3209,23 @@
         currentPage = n;
       }
 
+      // World Clock runs as its own page in an iframe, like Flight Garden.
+      // Its city picker opens with the chosen art; its back button returns here.
+      const pageClock = document.getElementById('pageClock');
+      const worldClockFrame = document.getElementById('worldClockFrame');
+
+      function openWorldClock(art) {
+        worldClockFrame.src = 'world-clock/index.html?embed=1&art=' + encodeURIComponent(art);
+        goToPage(5);
+      }
+
+      window.addEventListener('message', (event) => {
+        if (event.source === worldClockFrame.contentWindow && event.data && event.data.type === 'world-clock-back') {
+          goToPage(1);
+          worldClockFrame.removeAttribute('src');
+        }
+      });
+
       window.addEventListener('message', (event) => {
         const embeddedFlightGarden = document.getElementById('flightGardenFrame');
         if (!embeddedFlightGarden || event.source !== embeddedFlightGarden.contentWindow) return;
@@ -3159,6 +3238,11 @@
       });
 
       function openCard(cardEl) {
+        if (cardEl.dataset.clockArt) {
+          openWorldClock(cardEl.dataset.clockArt);
+          return;
+        }
+
         const selectedData = document.querySelector('.data-item.selected');
         const isFlight = (selectedData && selectedData.dataset.title === 'Flight') || cardEl.id === 'gardenCard';
 
@@ -4756,8 +4840,44 @@
           .catch(() => { previewWeatherFetched = false; });
       }
 
+      const lpClockPreview = document.getElementById('lpClockPreview');
+      lpClockPreview.addEventListener('load', () => {
+        if (!lpClockPreview.getAttribute('src')) return;
+        previewHasFrame = true;
+        lpVideoFrame.classList.add('has-frame');
+      });
+
+      function fitClockPreview() {
+        lpClockPreview.style.transform = 'scale(' + (lpVideoFrame.clientWidth / 1920) + ')';
+      }
+      new ResizeObserver(fitClockPreview).observe(lpVideoFrame);
+
+      // The live clock (the viewer's remembered cities) for World Clock arts.
+      // It is unloaded whenever it is off-screen, as it runs its own WebGL.
+      function showClockPreview() {
+        const src = 'world-clock/index.html?embed=1&preview=1&art=' + encodeURIComponent(previewCard.dataset.clockArt);
+        if (lpClockPreview.getAttribute('src') !== src) lpClockPreview.src = src;
+      }
+
+      function hideClockPreview() {
+        lpClockPreview.removeAttribute('src');
+      }
+
       function loadLandingPreview(card) {
         previewCard = card;
+        const isClock = !!card.dataset.clockArt;
+        lpVideoFrame.classList.toggle('is-clock', isClock);
+        document.getElementById('lpBadge').textContent = isClock ? 'Live Preview' : 'Video Preview';
+        if (isClock) {
+          lpPreviewVideo.pause();
+          lpPreviewVelo.pause();
+          previewHasFrame = false;
+          lpVideoFrame.classList.remove('has-frame', 'has-error');
+          lpLoading.textContent = 'Loading preview';
+          if (currentPage === 1 || currentPage === 0) showClockPreview();
+          return;
+        }
+        hideClockPreview();
         // Blank + "Loading" until the new art's first coloured frame is drawn,
         // so the previous art (or a stale thumbnail) never shows in between.
         previewHasFrame = false;
@@ -4788,6 +4908,10 @@
       }
 
       function playLandingPreview() {
+        if (previewCard && previewCard.dataset.clockArt) {
+          showClockPreview();
+          return;
+        }
         if (previewUserPaused || !previewCard) return;
         try { lpPreviewVelo.currentTime = lpPreviewVideo.currentTime; } catch (e) { }
         lpPreviewVideo.play().catch(() => { });
@@ -4796,6 +4920,7 @@
       }
 
       function pauseLandingPreview() {
+        hideClockPreview();
         lpPreviewVideo.pause();
         lpPreviewVelo.pause();
         if (previewLoopId) cancelAnimationFrame(previewLoopId);
