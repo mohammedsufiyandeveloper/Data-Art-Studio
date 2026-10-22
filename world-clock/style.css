@@ -189,7 +189,7 @@ button {
     --strip-height: calc(var(--name-height) + var(--clock-size) / 2);
     --foot-height: calc(4.2 * var(--cu));
     /* Between temperature and wind in the foot strip. */
-    --pair-gap: calc(3.03 * var(--cu));
+    --pair-gap: calc(1.5 * var(--cu));
   }
 
   .clock-view::before,
@@ -373,6 +373,7 @@ button {
     display: block;
     align-self: center;
     font-size: max(16px, calc(1.9 * var(--cu)));
+    font-weight: 600;
     letter-spacing: 0.12em;
   }
 }
@@ -976,6 +977,18 @@ body:has(.landing-view) {
   white-space: nowrap;
 }
 
+/* Temperature and wind meet either side of the band's middle with a set gap,
+   as on the clock, so the gap holds however many bands there are. */
+.lp-frame .mini-temp {
+  justify-self: end;
+  margin-right: calc(5 * var(--u));
+}
+
+.lp-frame .mini-wind {
+  justify-self: start;
+  margin-left: calc(5 * var(--u));
+}
+
 .lp-frame .mini-label {
   display: block;
   margin-bottom: calc(2 * var(--u));
@@ -987,12 +1000,17 @@ body:has(.landing-view) {
 }
 
 /* Digital clocks: the time in figures under the city, in a shorter strip. */
+/* Even room above the city and below the time inside the strip. */
 .lp-frame.digital .mini-bands::before {
-  height: 15%;
+  height: 13.5%;
 }
 
 .lp-frame.digital .mini-band {
-  grid-template-rows: 5% 6% 9% 2% 1fr 12% 5%;
+  grid-template-rows: 5% 5% 7% 3% 1fr 12% 5%;
+}
+
+.lp-frame.digital .mini-country {
+  padding-bottom: calc(1 * var(--u));
 }
 
 .lp-frame.digital .analog {

@@ -653,24 +653,6 @@
       white-space: nowrap;
     }
 
-    .art-view {
-      display: inline-flex;
-      align-items: center;
-      gap: calc(6 * var(--u));
-      font-size: calc(12 * var(--u));
-      color: var(--lp-muted);
-    }
-
-    .art-view svg {
-      width: calc(12 * var(--u));
-      height: calc(12 * var(--u));
-      fill: none;
-      stroke: currentColor;
-      stroke-width: 2;
-      stroke-linecap: round;
-      stroke-linejoin: round;
-    }
-
     .art-card.selected {
       background: #000000;
       color: #ffffff;
@@ -679,10 +661,6 @@
 
     .art-card.selected .art-thumb {
       border-color: #ffffff;
-    }
-
-    .art-card.selected .art-view {
-      color: rgba(255, 255, 255, 0.7);
     }
 
     /* Tablet: Data and Art side by side, preview + Generate below. */
@@ -2691,9 +2669,6 @@
               data-sh="-0.8" role="radio" tabindex="0" aria-checked="false">
               <span class="art-thumb"><img src="assets/garden_thumb.jpg" alt=""></span>
               <span class="art-name">Garden</span>
-              <span class="art-view">View <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M5 12h14M13 6l6 6-6 6" />
-                </svg></span>
             </div>
 
             <div class="art-card" id="artCard1" data-title="ART 1" data-blurb="Coloured by data and motion"
@@ -2701,9 +2676,6 @@
               data-sh="-0.8" role="radio" tabindex="0" aria-checked="false">
               <span class="art-thumb"><img src="assets/art_1_thumb.jpg" alt=""></span>
               <span class="art-name">ART 1</span>
-              <span class="art-view">View <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M5 12h14M13 6l6 6-6 6" />
-                </svg></span>
             </div>
 
             <div class="art-card" id="artCard2" data-title="ART 2" data-blurb="Coloured by data and motion"
@@ -2711,9 +2683,6 @@
               data-sh="-0.8" role="radio" tabindex="0" aria-checked="false">
               <span class="art-thumb"><img src="assets/art_2_thumb.jpg" alt=""></span>
               <span class="art-name">ART 2</span>
-              <span class="art-view">View <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M5 12h14M13 6l6 6-6 6" />
-                </svg></span>
             </div>
 
             <div class="art-card" id="artCard3" data-title="ART 3" data-blurb="Coloured by data and motion"
@@ -2721,9 +2690,6 @@
               data-hl="0.4" data-sh="0.2" role="radio" tabindex="0" aria-checked="false">
               <span class="art-thumb"><img src="assets/art_3_thumb.jpg" alt=""></span>
               <span class="art-name">ART 3</span>
-              <span class="art-view">View <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M5 12h14M13 6l6 6-6 6" />
-                </svg></span>
             </div>
 
             <div class="art-card" id="artCard4" data-title="ART 4" data-blurb="Coloured by data and motion"
@@ -2731,9 +2697,6 @@
               data-sh="-0.8" role="radio" tabindex="0" aria-checked="false">
               <span class="art-thumb"><img src="assets/art_4_thumb.jpg" alt=""></span>
               <span class="art-name">ART 4</span>
-              <span class="art-view">View <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M5 12h14M13 6l6 6-6 6" />
-                </svg></span>
             </div>
 
             <div class="art-card" id="clockMapCard" data-title="World Map" data-clock-art="map"
@@ -2741,9 +2704,6 @@
               aria-checked="false">
               <span class="art-thumb"><img src="assets/clock_map_thumb.jpg" alt=""></span>
               <span class="art-name">World Map</span>
-              <span class="art-view">View <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M5 12h14M13 6l6 6-6 6" />
-                </svg></span>
             </div>
 
             <div class="art-card" id="clockFabricCard" data-title="Fabric" data-clock-art="fabric"
@@ -2751,9 +2711,6 @@
               aria-checked="false">
               <span class="art-thumb"><img src="assets/clock_fabric_thumb.jpg" alt=""></span>
               <span class="art-name">Fabric</span>
-              <span class="art-view">View <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M5 12h14M13 6l6 6-6 6" />
-                </svg></span>
             </div>
           </div>
         </section>
