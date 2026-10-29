@@ -457,12 +457,9 @@ button {
   color: #fff;
 }
 
-.map-art .credit {
-  color: rgb(255 255 255 / 0.45);
-}
-
+.map-art .credit,
 .map-art .credit:hover {
-  color: rgb(255 255 255 / 0.8);
+  color: #000;
 }
 
 .credit {
@@ -474,6 +471,14 @@ button {
   font-size: max(10px, calc(0.7 * min(1vw, 1.78vh)));
   color: rgb(0 0 0 / 0.45);
   text-decoration: none;
+  /* Hidden like .back until the pointer is over the view. */
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.clock-view:hover .credit,
+.credit:focus-visible {
+  opacity: 1;
 }
 
 .credit:hover {
