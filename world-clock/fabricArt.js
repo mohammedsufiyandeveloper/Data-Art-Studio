@@ -1,192 +1,249 @@
 /**
- * The Fabric artwork: a looping film of beaded cloth, drawn with WebGL into
- * the given canvas and tinted one band at a time, side by side, with a color
- * for each band's temperature. The bands melt into each other across soft
- * seams that wander with slow noise.
+ * The Fabric artwork, generated live: one panel of cloth per band, side by
+ * side with a sharp line between them, each a sheet of tiny lit beads that
+ * slowly folds and crumples, drawn with WebGL into the given canvas. Each
+ * panel is tinted with its band's temperature color, has folds of its own and
+ * moves in its own way (see MOTIONS), driven by its band's wind.
  *
- * The film is one video, so a band's wind can't change its speed. It moves the
- * band's view of the film instead: each sways through noise of its own on its
- * own clock, ticking faster the windier its city, and the wind also makes the
- * sway bigger, so a calm city barely stirs while a windy one heaves. Until the
- * video arrives the bands show their color alone.
+ * A panel is a flat sheet of beads pushed around by layered 3D noise: a broad
+ * layer folds it over itself and a finer one wrinkles it, then the panel's
+ * motion moves it. Each panel runs on its own clock, ticking faster the
+ * windier its city, and the wind also makes its motion bigger, so a calm city
+ * barely stirs while a windy one heaves. Every bead is shaded twice, once by
+ * the fold it sits on (so the folds read) and once as a little sphere (so the
+ * surface looks beaded).
  *
- * `getBands` returns one { tempC, windKph } per band, or nothing for a band
- * whose weather hasn't arrived yet. Read from CSS on the canvas: --art-rows
- * (1 when the bands are stacked as rows, as on phones).
+ * `getBands` returns one { color: [r, g, b], windKph } per band, or nothing
+ * for a band whose weather hasn't arrived yet. Read from CSS on the canvas:
+ * --art-rows (1 when the bands are stacked as rows, as on phones).
  */
 const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
 const MAX_BANDS = 5;
 const WAITING_COLOR = [150, 156, 170];
 
-// In the R2 video bucket; its ends are cross-dissolved, so it loops cleanly.
-const VIDEO_URL = "https://pub-085468ffd2bd40868c645940c8033bb2.r2.dev/particle_fabric.mp4";
-const VIDEO_ASPECT = 16 / 9; // until the video says otherwise
-// Temperature → tint (°C). Much purer than the bands' colors in clock.js: the
-// shader brightens the tint, and anything less pure washes out to pastel.
-const TINT_STOPS = [
-  [-20, [0, 51, 204]],
-  [-10, [0, 82, 245]],
-  [0, [0, 128, 255]],
-  [7, [0, 183, 255]],
-  [14, [0, 168, 245]],
-  [16, [0, 204, 184]],
-  [18, [0, 204, 0]],
-  [20, [230, 222, 0]],
-  [23, [255, 179, 0]],
-  [27, [255, 100, 10]],
-  [32, [255, 10, 10]],
-  [40, [194, 0, 26]],
-];
-// Wind speed (km/h) at which a band is fully stirred; calmer is gentler, down
-// to still air.
+// The view is 2 units tall at the sheet. Each panel's sheet reaches this far
+// past its panel so the folds never pull it inside.
+const SHEET_MARGIN = 0.75;
+const SPACING = 0.0088; // between beads on the flat sheet
+const BEAD = 1.7 * SPACING; // bead diameter: a little over the spacing, so the cloth reads as closed
+const FOV = (30 * Math.PI) / 180;
+// Wind speed (km/h) at which a panel is fully stirred; calmer is gentler,
+// down to still air.
 const FULL_WIND_KPH = 40;
-// How fast a band's clock runs, in seconds per second, in still air and at
+// How fast a panel's clock runs, in seconds per second, in still air and at
 // full wind.
 const CALM_PACE = 0.3;
 const FULL_PACE = 2.2;
-// How fast the seams wander, in noise units per second.
-const SEAM_DRIFT = 0.48;
+// The panels' motions, in band order (see motion() in the shader).
+const MOTIONS = ["billow", "wave", "swirl", "flutter", "drift"];
+// The black line between panels, in the screen's own pixels: one is the
+// finest line the screen can show.
+const DIVIDER = 1;
 
-function tintFor(t) {
-  if (t <= TINT_STOPS[0][0]) return TINT_STOPS[0][1];
-  for (let i = 1; i < TINT_STOPS.length; i++) {
-    const [t1, c1] = TINT_STOPS[i];
-    if (t <= t1) {
-      const [t0, c0] = TINT_STOPS[i - 1];
-      const k = (t - t0) / (t1 - t0);
-      return c0.map((v, j) => v + (c1[j] - v) * k);
+/**
+ * The beads of one panel's sheet, w by h units around its centre: their flat
+ * positions (jittered off a grid so no pattern shows) and a random number each.
+ */
+function sheet(w, h) {
+  const cols = Math.ceil(w / SPACING);
+  const rows = Math.ceil(h / SPACING);
+  const flat = new Float32Array(cols * rows * 2);
+  const rand = new Float32Array(cols * rows);
+  for (let r = 0, i = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++, i++) {
+      flat[i * 2] = (c + Math.random()) * SPACING - w / 2;
+      flat[i * 2 + 1] = (r + Math.random()) * SPACING - h / 2;
+      rand[i] = Math.random();
     }
   }
-  return TINT_STOPS[TINT_STOPS.length - 1][1];
+  return { flat, rand, count: cols * rows };
 }
 
+// 3D simplex noise (Ashima Arts / Stefan Gustavson, MIT licence).
+const NOISE = /* glsl */ `
+  vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+  vec4 mod289(vec4 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+  vec4 permute(vec4 x) { return mod289(((x * 34.0) + 1.0) * x); }
+  vec4 taylorInvSqrt(vec4 r) { return 1.79284291400159 - 0.85373472095314 * r; }
+
+  float snoise(vec3 v) {
+    const vec2 C = vec2(1.0 / 6.0, 1.0 / 3.0);
+    const vec4 D = vec4(0.0, 0.5, 1.0, 2.0);
+    vec3 i = floor(v + dot(v, C.yyy));
+    vec3 x0 = v - i + dot(i, C.xxx);
+    vec3 g = step(x0.yzx, x0.xyz);
+    vec3 l = 1.0 - g;
+    vec3 i1 = min(g.xyz, l.zxy);
+    vec3 i2 = max(g.xyz, l.zxy);
+    vec3 x1 = x0 - i1 + C.xxx;
+    vec3 x2 = x0 - i2 + C.yyy;
+    vec3 x3 = x0 - D.yyy;
+    i = mod289(i);
+    vec4 p = permute(permute(permute(
+        i.z + vec4(0.0, i1.z, i2.z, 1.0))
+      + i.y + vec4(0.0, i1.y, i2.y, 1.0))
+      + i.x + vec4(0.0, i1.x, i2.x, 1.0));
+    float n_ = 0.142857142857;
+    vec3 ns = n_ * D.wyz - D.xzx;
+    vec4 j = p - 49.0 * floor(p * ns.z * ns.z);
+    vec4 x_ = floor(j * ns.z);
+    vec4 y_ = floor(j - 7.0 * x_);
+    vec4 x = x_ * ns.x + ns.yyyy;
+    vec4 y = y_ * ns.x + ns.yyyy;
+    vec4 h = 1.0 - abs(x) - abs(y);
+    vec4 b0 = vec4(x.xy, y.xy);
+    vec4 b1 = vec4(x.zw, y.zw);
+    vec4 s0 = floor(b0) * 2.0 + 1.0;
+    vec4 s1 = floor(b1) * 2.0 + 1.0;
+    vec4 sh = -step(h, vec4(0.0));
+    vec4 a0 = b0.xzyw + s0.xzyw * sh.xxyy;
+    vec4 a1 = b1.xzyw + s1.xzyw * sh.zzww;
+    vec3 p0 = vec3(a0.xy, h.x);
+    vec3 p1 = vec3(a0.zw, h.y);
+    vec3 p2 = vec3(a1.xy, h.z);
+    vec3 p3 = vec3(a1.zw, h.w);
+    vec4 norm = taylorInvSqrt(vec4(dot(p0, p0), dot(p1, p1), dot(p2, p2), dot(p3, p3)));
+    p0 *= norm.x;
+    p1 *= norm.y;
+    p2 *= norm.z;
+    p3 *= norm.w;
+    vec4 m = max(0.6 - vec4(dot(x0, x0), dot(x1, x1), dot(x2, x2), dot(x3, x3)), 0.0);
+    m = m * m;
+    return 42.0 * dot(m * m, vec4(dot(p0, x0), dot(p1, x1), dot(p2, x2), dot(p3, x3)));
+  }
+`;
+
 const VERTEX = /* glsl */ `
-  attribute vec2 aPosition;
-  varying vec2 vUv;
+  attribute vec2 aFlat; // where the bead sits on its panel's flat sheet
+  attribute float aRand;
+  uniform float uTime; // the panel's own clock (see CALM_PACE)
+  uniform int uMotion; // which of MOTIONS the panel moves with
+  uniform float uFocal; // 1 / tan(half the field of view)
+  uniform float uAspect;
+  uniform float uDistance; // from the camera to the sheet
+  uniform vec2 uDrift; // the camera's slow sway
+  uniform float uPixels; // the canvas height in pixels, halved
+  uniform float uBead;
+  uniform vec2 uCenter; // the panel's centre on the screen, in view units
+  uniform vec2 uSeed; // where in the noise this panel's folds come from
+  uniform float uWind; // the panel's wind, 0 (still) to 1 (full)
+  varying vec3 vNormal;
+  varying float vShadow;
+  varying float vRand;
+
+  ${NOISE}
+
+  vec3 noise3(vec3 q) {
+    return vec3(snoise(q), snoise(q + vec3(31.4, 0.0, 0.0)), snoise(q + vec3(0.0, 47.2, 0.0)));
+  }
+
+  // Where the panel carries a point of its sheet: broad folds that lay it
+  // over itself and wrinkles, then the panel's motion on top, as big as its
+  // wind (a little even in still air).
+  vec3 fold(vec2 s) {
+    float t = uTime;
+    float a = 0.2 + 0.8 * uWind;
+    vec2 q = s + uSeed;
+    // drift: the folds slide sideways across the panel, like cloth on a line
+    // in a steady wind.
+    if (uMotion == 4) q.x -= t * 0.25;
+
+    vec3 p = vec3(s, 0.0);
+    p += noise3(vec3(q * 0.55, t * 0.08)) * vec3(0.55, 0.55, 1.1);
+    p += noise3(vec3(q * 1.6, t * 0.13 + 10.0)) * vec3(0.15, 0.15, 0.36);
+
+    if (uMotion == 0) {
+      // billow: great slow swells rising and falling under the cloth.
+      p += noise3(vec3(q * 0.3, t * 0.35 + 40.0)) * vec3(0.08, 0.08, 0.75) * a;
+    } else if (uMotion == 1) {
+      // wave: ripples running up the panel, like a flag.
+      float phase = q.y * 2.6 - t * 2.2 + snoise(vec3(q * 0.5, t * 0.15 + 50.0)) * 1.6;
+      p.z += sin(phase) * 0.16 * a;
+      p.y += cos(phase) * 0.04 * a;
+    } else if (uMotion == 2) {
+      // swirl: the cloth twists round the middle of the panel, one way then
+      // the other.
+      float turn = sin(t * 0.55) * 0.5 * a / (1.0 + dot(s, s) * 1.5);
+      p.xy = mat2(cos(turn), sin(turn), -sin(turn), cos(turn)) * p.xy;
+      p.z += snoise(vec3(q * 0.9, t * 0.3 + 60.0)) * 0.25 * a;
+    } else if (uMotion == 3) {
+      // flutter: a fast, fine shiver all over.
+      p += noise3(vec3(q * 3.2, t * 1.6 + 70.0)) * vec3(0.025, 0.025, 0.11) * a;
+    } else {
+      // drift: low gusts lifting the sliding folds.
+      p.z += snoise(vec3(q * 0.8, t * 0.4 + 80.0)) * 0.3 * a;
+    }
+    return p;
+  }
 
   void main() {
-    vUv = aPosition * 0.5 + 0.5;
-    gl_Position = vec4(aPosition, 0.0, 1.0);
+    const float e = 0.01;
+    vec3 p = fold(aFlat);
+    vec3 du = fold(aFlat + vec2(e, 0.0)) - p;
+    vec3 dv = fold(aFlat + vec2(0.0, e)) - p;
+    vec3 n = normalize(cross(du, dv));
+    // Where a fold turns the sheet away, its underside is what shows, in the
+    // fold's shadow.
+    float under = step(n.z, 0.0);
+    vNormal = n * (1.0 - 2.0 * under);
+    vShadow = mix(0.38, 1.0, smoothstep(-1.0, 0.55, p.z)) * mix(1.0, 0.7, under);
+    vRand = aRand;
+
+    // The camera looks straight down -z from in front of the sheets.
+    vec3 v = p + vec3(uCenter - uDrift, -uDistance);
+    const float near = 0.1;
+    const float far = 20.0;
+    gl_Position = vec4(
+      v.x * uFocal / uAspect,
+      v.y * uFocal,
+      v.z * (far + near) / (near - far) + 2.0 * far * near / (near - far),
+      -v.z
+    );
+    // Beads grow where the sheet stretches, so it never opens up.
+    float stretch = clamp(sqrt(length(cross(du, dv)) / (e * e)), 1.0, 1.4);
+    gl_PointSize = uBead * (0.85 + 0.3 * aRand) * stretch * uFocal * uPixels / -v.z;
   }
 `;
 
 const FRAGMENT = /* glsl */ `
   precision highp float;
-  uniform sampler2D uVideo;
-  uniform vec2 uCover; // how much of the film the screen shows, so it fills without stretching
-  uniform vec2 uTexel; // one pixel of the film
-  uniform float uCount; // how many bands there are
-  uniform float uRows; // 1 when the bands are stacked as rows
-  uniform float uSeamTime; // how far the seams have wandered
-  uniform vec3 uColors[${MAX_BANDS}]; // each band's tint, 0–1
-  uniform float uWinds[${MAX_BANDS}]; // each band's wind, 0 (still) to 1 (full)
-  uniform float uTimes[${MAX_BANDS}]; // each band's own clock (see CALM_PACE)
-  varying vec2 vUv;
+  uniform vec3 uColor; // the panel's band color, 0–1
+  varying vec3 vNormal;
+  varying float vShadow;
+  varying float vRand;
 
-  const vec3 LUMA = vec3(0.299, 0.587, 0.114);
-  const float SEAM = 0.12; // how far a seam blends to each side, in screens
-  const float SEAM_WANDER = 0.092; // how far a seam strays, in screens
-  const float SEAM_SCALE = 3.0;
-  const float TINT = 0.92; // how much of the result is the tint, not the film
-
-  float hash(vec2 p) {
-    p = fract(mod(p, 289.0) * vec2(123.34, 456.21));
-    p += dot(p, p + 45.32);
-    return fract(p.x * p.y);
-  }
-
-  float noise(vec2 p) {
-    vec2 i = floor(p);
-    vec2 f = fract(p);
-    vec2 u = f * f * (3.0 - 2.0 * f);
-    return mix(
-      mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x),
-      mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x),
-      u.y
-    );
-  }
-
-  // Four layers of noise, each finer and fainter than the last.
-  float layered(vec2 p) {
-    float sum = 0.0;
-    float size = 0.5;
-    for (int i = 0; i < 4; i++) {
-      sum += size * noise(p);
-      p *= 2.02;
-      size *= 0.5;
-    }
-    return sum / 0.9375;
-  }
-
-  // The film's color grade, ahead of the tint: richer, with the highlights
-  // lifted, the shadows sunk and the contrast raised, so the folds read.
-  vec3 grade(vec3 c) {
-    float lum = dot(c, LUMA);
-    c = mix(vec3(lum), c, 1.65);
-    float high = max(c.r, max(c.g, c.b));
-    float low = min(c.r, min(c.g, c.b));
-    float saturation = high < 0.001 ? 0.0 : (high - low) / high;
-    c = mix(vec3(lum), c, 2.0 - saturation);
-    c += (1.0 - c) * max(lum - 0.5, 0.0) * 2.0;
-    c *= 1.0 - 0.8 * max(0.5 - lum, 0.0) * 2.0;
-    c = (c * 0.93 - 0.5) * 1.29 + 0.5;
-    return clamp(c, 0.0, 1.0);
+  // The overlay blend mode: darkens where the base is dark, lightens where
+  // it is light, keeping the base's contrast under the blend color.
+  vec3 overlay(vec3 base, vec3 blend) {
+    return mix(2.0 * base * blend, 1.0 - 2.0 * (1.0 - base) * (1.0 - blend), step(0.5, base));
   }
 
   void main() {
-    // Where this point falls among the bands, the seams pushed about by noise.
-    float along = uRows > 0.5 ? 1.0 - vUv.y : vUv.x;
-    float across = uRows > 0.5 ? vUv.x : vUv.y;
-    float wander = layered(vec2(
-      across * SEAM_SCALE + uSeamTime * 0.35,
-      along * SEAM_SCALE * 0.55 + uSeamTime * 0.15
-    ));
-    float place = clamp(along + (wander - 0.5) * 2.0 * SEAM_WANDER, 0.0, 1.0);
+    vec2 c = gl_PointCoord * 2.0 - 1.0;
+    float r2 = dot(c, c);
+    if (r2 > 1.0) discard;
+    vec3 sphere = vec3(c.x, -c.y, sqrt(1.0 - r2)); // the bead's own surface
 
-    // Each band's share of this point, and from them the tint and the sway:
-    // broad, slow noise pushing the band's view of the film about, as far as
-    // its wind (a little even in still air).
-    vec3 tint = vec3(0.0);
-    vec2 sway = vec2(0.0);
-    float total = 0.0;
-    for (int i = 0; i < ${MAX_BANDS}; i++) {
-      float n = float(i);
-      if (n >= uCount) break;
-      float share = smoothstep(n / uCount - SEAM, n / uCount + SEAM, place)
-        * (1.0 - smoothstep((n + 1.0) / uCount - SEAM, (n + 1.0) / uCount + SEAM, place));
-      if (share < 0.001) continue;
-      vec2 q = vUv * 2.5 + 17.3 * (n + 1.0);
-      float drift = uTimes[i] * 0.12;
-      vec2 push = vec2(noise(q + drift), noise(q + vec2(31.4, 47.2) - drift)) - 0.5;
-      sway += push * (0.008 + 0.032 * uWinds[i]) * share;
-      tint += uColors[i] * share;
-      total += share;
-    }
-    tint /= total;
-    sway /= total;
+    // Soft studio light from the upper left, in front.
+    vec3 light = normalize(vec3(-0.35, 0.65, 0.68));
+    float fold = clamp(dot(vNormal, light) * 0.6 + 0.45, 0.0, 1.0);
+    float bead = max(dot(sphere, light), 0.0);
+    float contact = mix(0.55, 1.0, sphere.z); // shade where beads meet
+    float shine = pow(max(dot(reflect(-light, sphere), vec3(0.0, 0.0, 1.0)), 0.0), 24.0) * 0.25;
+    float lum = (0.12 + 0.88 * fold) * (0.45 + 0.55 * bead) * contact * vShadow + shine * fold;
+    lum *= 0.94 + 0.12 * vRand;
 
-    // The view is zoomed by the furthest it can sway, so it never runs off the
-    // edge of the film.
-    vec2 uv = 0.5 + (vUv - 0.5) * uCover * 0.96 + sway;
-
-    // Sharpened against its neighbours, so the beads stay crisp.
-    vec3 film = texture2D(uVideo, uv).rgb;
-    vec3 blur = (texture2D(uVideo, uv + vec2(uTexel.x, 0.0)).rgb + texture2D(uVideo, uv - vec2(uTexel.x, 0.0)).rgb
-      + texture2D(uVideo, uv + vec2(0.0, uTexel.y)).rgb + texture2D(uVideo, uv - vec2(0.0, uTexel.y)).rgb) * 0.25;
-    vec3 graded = grade(clamp(film + film - blur, 0.0, 1.0));
-
-    // The tint carried by the cloth's light and shade, its brightest beads
-    // washing out toward white, with a trace of the plain film left in.
-    float lum = dot(graded, LUMA);
-    vec3 tinted = tint * (0.5 + 1.1 * pow(lum, 0.85));
-    tinted = mix(tinted, vec3(1.0), smoothstep(0.85, 1.0, lum) * 0.62);
-    gl_FragColor = vec4(clamp(mix(graded, clamp(tinted, 0.0, 1.0), TINT), 0.0, 1.0), 1.0);
+    // The band color over the cloth's light and shade: the brightness is
+    // first eased into a middle range so highlights stay colored and shadows
+    // don't sink to black.
+    float shade = mix(0.25, 0.68, smoothstep(0.05, 0.9, lum));
+    gl_FragColor = vec4(overlay(vec3(shade), uColor * 0.86), 1.0);
   }
 `;
 
 export function startFabricArt(canvas, getBands) {
-  const gl = canvas.getContext("webgl", { alpha: true, antialias: false, depth: false, premultipliedAlpha: true });
-  if (!gl) return () => {};
+  const gl = canvas.getContext("webgl", { alpha: true, antialias: false, depth: true, premultipliedAlpha: true });
+  if (!gl) return () => { };
 
   const program = gl.createProgram();
   for (const [type, source] of [[gl.VERTEX_SHADER, VERTEX], [gl.FRAGMENT_SHADER, FRAGMENT]]) {
@@ -200,39 +257,28 @@ export function startFabricArt(canvas, getBands) {
   gl.useProgram(program);
   const u = (name) => gl.getUniformLocation(program, name);
 
-  const quad = gl.createBuffer();
-  const at = gl.getAttribLocation(program, "aPosition");
-  gl.bindBuffer(gl.ARRAY_BUFFER, quad);
-  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
-  gl.enableVertexAttribArray(at);
-  gl.vertexAttribPointer(at, 2, gl.FLOAT, false, 0, 0);
+  const flatBuffer = gl.createBuffer();
+  const randBuffer = gl.createBuffer();
+  for (const [name, buffer, size] of [["aFlat", flatBuffer, 2], ["aRand", randBuffer, 1]]) {
+    const at = gl.getAttribLocation(program, name);
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+    gl.enableVertexAttribArray(at);
+    gl.vertexAttribPointer(at, size, gl.FLOAT, false, 0, 0);
+  }
+  let count = 0;
+  let sheetKey = "";
 
-  // One black pixel until the video has a frame to show.
-  const texture = gl.createTexture();
-  gl.bindTexture(gl.TEXTURE_2D, texture);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 255]));
-  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+  gl.enable(gl.DEPTH_TEST);
+  const focal = 1 / Math.tan(FOV / 2);
+  gl.uniform1f(u("uFocal"), focal);
+  gl.uniform1f(u("uDistance"), focal); // so the view is 2 units tall at the sheet
+  gl.uniform1f(u("uBead"), BEAD);
 
-  const video = Object.assign(document.createElement("video"), {
-    crossOrigin: "anonymous",
-    muted: true,
-    loop: true,
-    playsInline: true,
-    preload: "auto",
-    src: VIDEO_URL,
-  });
-  if (!reducedMotion) video.play().catch(() => {});
-  let uploaded = -1; // the video time now on the texture
-
+  // Each panel's own place in the noise, so no two fold alike.
+  const seeds = Array.from({ length: MAX_BANDS }, (_, i) => [17.3 * (i + 1), -9.1 * (i + 1)]);
   let colors = [];
   let winds = [];
-  const clocks = Array.from({ length: MAX_BANDS }, (_, i) => 100 * i); // each band's own time
-  const colorData = new Float32Array(MAX_BANDS * 3);
-  const windData = new Float32Array(MAX_BANDS);
+  const clocks = Array.from({ length: MAX_BANDS }, (_, i) => 100 * i); // each panel's own time
   let last = performance.now();
   let frame = 0;
   let drawnKey = "";
@@ -257,53 +303,82 @@ export function startFabricArt(canvas, getBands) {
     const dt = Math.min(Math.max(ms - last, 0), 100) / 1000; // a stalled tab doesn't jump ahead
     last = ms;
     colors = bands.map((b, i) => {
-      const target = b ? tintFor(b.tempC) : WAITING_COLOR;
+      const target = b?.color ?? WAITING_COLOR;
       return (colors[i] ?? target).map((c, j) => c + (target[j] - c) * ease);
     });
     winds = bands.map((b, i) => {
       const target = Math.min((b?.windKph ?? 0) / FULL_WIND_KPH, 1);
       return (winds[i] ?? 0) + (target - (winds[i] ?? 0)) * windEase;
     });
-    // Each band's clock runs at its wind's pace; the wind eases, so the pace
+    // Each panel's clock runs at its wind's pace; the wind eases, so the pace
     // does too.
     if (!reducedMotion) winds.forEach((wind, i) => (clocks[i] += dt * (CALM_PACE + (FULL_PACE - CALM_PACE) * wind)));
 
-    // A new frame of the film, if there is one.
-    if (video.readyState >= 2 && video.currentTime !== uploaded) {
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, video);
-      uploaded = video.currentTime;
+    // One sheet, the size of a panel and its margin, drawn once per panel. A
+    // new one when the screen's shape or the number of panels changes.
+    const panelW = rows ? 2 * aspect : (2 * aspect) / n;
+    const panelH = rows ? 2 / n : 2;
+    const key = `${panelW.toFixed(2)}x${panelH.toFixed(2)}`;
+    if (key !== sheetKey) {
+      sheetKey = key;
+      const s = sheet(panelW + 2 * SHEET_MARGIN, panelH + 2 * SHEET_MARGIN);
+      count = s.count;
+      gl.bindBuffer(gl.ARRAY_BUFFER, flatBuffer);
+      gl.bufferData(gl.ARRAY_BUFFER, s.flat, gl.STATIC_DRAW);
+      gl.bindBuffer(gl.ARRAY_BUFFER, randBuffer);
+      gl.bufferData(gl.ARRAY_BUFFER, s.rand, gl.STATIC_DRAW);
     }
 
     // With reduced motion the cloth holds still, so it's only redrawn when
     // something it shows changes.
-    const frameKey = `${colors.map((c) => c.map(Math.round))}|${winds.map((v) => v.toFixed(2))}|${w}x${h}|${rows}|${uploaded}`;
+    const frameKey = `${colors.map((c) => c.map(Math.round))}|${winds.map((v) => v.toFixed(2))}|${w}x${h}|${rows}`;
     if (reducedMotion && frameKey === drawnKey) return;
     drawnKey = frameKey;
 
+    const t = reducedMotion ? 0 : ms / 1000;
     gl.viewport(0, 0, w, h);
-    const videoAspect = video.videoWidth ? video.videoWidth / video.videoHeight : VIDEO_ASPECT;
-    gl.uniform2f(u("uCover"), Math.min(aspect / videoAspect, 1), Math.min(videoAspect / aspect, 1));
-    gl.uniform2f(u("uTexel"), 1 / (video.videoWidth || 1920), 1 / (video.videoHeight || 1080));
-    gl.uniform1f(u("uCount"), n);
-    gl.uniform1f(u("uRows"), rows);
-    gl.uniform1f(u("uSeamTime"), reducedMotion ? 0 : (ms / 1000) * SEAM_DRIFT);
-    colors.forEach((c, i) => colorData.set(c.map((v) => v / 255), i * 3));
-    windData.set(winds);
-    gl.uniform3fv(u("uColors[0]"), colorData);
-    gl.uniform1fv(u("uWinds[0]"), windData);
-    gl.uniform1fv(u("uTimes[0]"), clocks);
-    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    gl.uniform1f(u("uAspect"), aspect);
+    gl.uniform1f(u("uPixels"), h / 2);
+    gl.uniform2f(u("uDrift"), Math.sin(t * 0.03) * 0.05, Math.cos(t * 0.025) * 0.03);
+
+    // Black, which shows as the lines between the panels.
+    gl.disable(gl.SCISSOR_TEST);
+    gl.clearColor(0, 0, 0, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    gl.enable(gl.SCISSOR_TEST);
+    const half = DIVIDER / 2;
+    const length = rows ? h : w;
+    for (let i = 0; i < n; i++) {
+      // The panel in pixels along the screen, less half the line on each
+      // inner side; WebGL counts rows from the bottom.
+      const a = Math.round((i * length) / n + (i ? half : 0));
+      const b = Math.round(((i + 1) * length) / n - (i < n - 1 ? half : 0));
+      if (rows) gl.scissor(0, h - b, w, b - a);
+      else gl.scissor(a, 0, b - a, h);
+
+      // Behind the beads, the band's color at its deepest shade, so any gap
+      // between them reads as a dark crease rather than showing the page.
+      const color = colors[i].map((c) => c / 255);
+      const deep = color.map((c) => 2 * 0.25 * c * 0.86);
+      gl.clearColor(deep[0], deep[1], deep[2], 1);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+
+      gl.uniform3f(u("uColor"), ...color);
+      gl.uniform1f(u("uWind"), winds[i]);
+      gl.uniform1f(u("uTime"), clocks[i]);
+      gl.uniform1i(u("uMotion"), i % MOTIONS.length);
+      gl.uniform2f(u("uSeed"), ...seeds[i]);
+      gl.uniform2f(u("uCenter"), rows ? 0 : -aspect + (i + 0.5) * panelW, rows ? 1 - (i + 0.5) * panelH : 0);
+      gl.drawArrays(gl.POINTS, 0, count);
+    }
+    gl.disable(gl.SCISSOR_TEST);
   }
   frame = requestAnimationFrame(draw);
 
   return function stop() {
     cancelAnimationFrame(frame);
-    // Dropping the source stops the download as well as the playback.
-    video.pause();
-    video.removeAttribute("src");
-    video.load();
-    gl.deleteBuffer(quad);
-    gl.deleteTexture(texture);
+    gl.deleteBuffer(flatBuffer);
+    gl.deleteBuffer(randBuffer);
     gl.deleteProgram(program);
   };
 }

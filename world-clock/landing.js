@@ -2,6 +2,7 @@ import { tempColor } from "./clock.js";
 import { LOCATIONS, LOCATIONS_BY_ID, MAX_PLACES } from "./locations.js";
 import { ARTS, ARTS_BY_ID } from "./arts.js";
 import { startFabricArt } from "./fabricArt.js";
+import { startParticleArt } from "./particleArt.js";
 import { startMapPreview } from "./mapPreview.js";
 import { createAnalogClock } from "./analogClock.js";
 
@@ -131,19 +132,21 @@ export function startLanding(root, initial, initialArt, initialClock, { onStart,
     frame.classList.toggle("digital", clockStyle === "digital");
   }
 
-  // The fabric runs in the preview as on the clock; the world map is stood in
-  // for by a flat map (see mapPreview.js).
+  // The fabric and the particles run in the preview as on the clock; the world
+  // map is stood in for by a flat map (see mapPreview.js).
   function renderArt() {
     for (const btn of artButtons) btn.setAttribute("aria-checked", btn.dataset.id === art);
     const chosen = ARTS_BY_ID.get(art);
     const isMap = chosen.id === "map";
     frame.classList.toggle("has-art", !isMap);
     frame.classList.toggle("has-map", isMap);
+    frame.classList.toggle("no-wind", Boolean(chosen.noWind));
     const colorOf = (id) => (weather.has(id) ? tempColor(weather.get(id).tempC) : null);
     stopArt?.();
+    const startBandArt = chosen.id === "particles" ? startParticleArt : startFabricArt;
     stopArt = !isMap
-      ? startFabricArt(artCanvas, () =>
-          selected.map((id) => weather.has(id) && { tempC: weather.get(id).tempC, windKph: weather.get(id).windKph }),
+      ? startBandArt(artCanvas, () =>
+          selected.map((id) => weather.has(id) && { color: colorOf(id), tempC: weather.get(id).tempC, windKph: weather.get(id).windKph }),
         )
       : startMapPreview(mapCanvas, () => selected.map((id) => ({ place: LOCATIONS_BY_ID.get(id), color: colorOf(id) })));
   }

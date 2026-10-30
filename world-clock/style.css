@@ -345,6 +345,17 @@ button {
     opacity: 0.8;
   }
 
+  /* An artwork without wind leaves the temperature alone in the middle. */
+  .clock-view.no-wind .band .wind {
+    display: none;
+  }
+
+  .clock-view.no-wind .temp {
+    grid-column: 1 / -1;
+    justify-self: center;
+    margin-right: 0;
+  }
+
   .clock-view .band .label {
     display: block;
     margin-bottom: calc(0.2 * var(--cu));
@@ -953,6 +964,16 @@ body:has(.landing-view) {
 .lp-frame .mini-wind {
   justify-self: start;
   margin-left: calc(5 * var(--u));
+}
+
+.lp-frame.no-wind .mini-wind {
+  display: none;
+}
+
+.lp-frame.no-wind .mini-temp {
+  grid-column: 1 / -1;
+  justify-self: center;
+  margin-right: 0;
 }
 
 .lp-frame .mini-label {
