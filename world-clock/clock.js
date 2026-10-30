@@ -131,7 +131,7 @@ export function startClock(root, places, { art, clockStyle, onBack }) {
         band.el.style.setProperty("--ink", ink);
         band.el.classList.toggle("light", ink !== "#ffffff");
         band.el.classList.remove("loading");
-        band.art = { color, windKph: w.windKph };
+        band.art = { color, tempC: w.tempC, windKph: w.windKph };
         band.value.textContent = Math.round(w.tempC);
         if (w.windKph != null) band.wind.textContent = Math.round(w.windKph);
         band.meta.textContent = w.condition ? `${band.place.country} · ${w.condition}` : band.place.country;

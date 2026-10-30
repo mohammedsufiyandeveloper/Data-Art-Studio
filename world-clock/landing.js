@@ -143,7 +143,7 @@ export function startLanding(root, initial, initialArt, initialClock, { onStart,
     stopArt?.();
     stopArt = !isMap
       ? startFabricArt(artCanvas, () =>
-          selected.map((id) => weather.has(id) && { color: colorOf(id), windKph: weather.get(id).windKph }),
+          selected.map((id) => weather.has(id) && { tempC: weather.get(id).tempC, windKph: weather.get(id).windKph }),
         )
       : startMapPreview(mapCanvas, () => selected.map((id) => ({ place: LOCATIONS_BY_ID.get(id), color: colorOf(id) })));
   }
