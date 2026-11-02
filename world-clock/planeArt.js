@@ -16,6 +16,12 @@
  * Everything in the air moves at the speed of the wind in the band it's passing
  * through, so a particle blown into a calmer band slows down as it crosses.
  *
+ * That air obeys the aircraft's aerodynamics, worked out from the shape below
+ * for a cruising lift coefficient: it meets the aircraft at its angle of attack,
+ * parts around the body and wings, is turned by the lift the wings make, and
+ * rolls up into a vortex off each wingtip. Fine lines of smoke, as in a wind
+ * tunnel, trace the way it goes.
+ *
  * `getBands` returns one { tempC, windKph } per band, or nothing for a band
  * whose weather hasn't arrived yet. Read from CSS on the canvas: --art-rows
  * (1 when the bands are stacked as rows, as on phones).
@@ -35,7 +41,8 @@ const SPEED_PER_KPH = 0.004;
 const TOP_SPEED = 0.34;
 const SURFACE_PARTICLES = 240000;
 const CONTRAIL_PARTICLES = 40000;
-const AIR_PARTICLES = 170000;
+const AIR_PARTICLES = 140000;
+const SMOKE_PARTICLES = 30000;
 const FLOATS = 9; // per particle: position 3, normal 3, randoms 2, kind 1
 const KIND = { surface: 0, light: 1, contrail: 2, air: 3 };
 
@@ -58,6 +65,32 @@ const NOSE_START = 0.72;
 const TAIL_START = -0.3;
 const ENGINE_Y = -0.125;
 const ENGINE_Z = 0.34;
+const WING = [
+  { x: 0.27, y: -0.07, z: 0, c: 0.62 },
+  { x: 0.2, y: -0.062, z: 0.11, c: 0.52 },
+  { x: 0.04, y: -0.03, z: 0.37, c: 0.27 },
+  { x: -0.28, y: 0.045, z: 0.98, c: 0.085 },
+];
+const WING_THICKNESS = 0.13;
+
+// The lift the wing makes, and what that does to the air. For an elliptical
+// lift distribution, Kutta–Joukowski gives the circulation at the wing's root
+// from its area and span; the wake's vortices take up that same circulation,
+// and end up pi/4 of the span apart.
+const LIFT_COEFFICIENT = 0.5;
+const WING_SPAN = 2 * WING[3].z;
+const WING_AREA = 2 * WING.slice(1).reduce((sum, s, i) => sum + ((s.z - WING[i].z) * (s.c + WING[i].c)) / 2, 0);
+const CIRCULATION = (2 * LIFT_COEFFICIENT * WING_AREA) / (Math.PI * WING_SPAN); // per unit of air speed
+const VORTEX_SPACING = (Math.PI / 4) * WING_SPAN;
+
+// Lines of smoke let into the air ahead of the aircraft, as { y, z }: a rake up
+// the middle, over the body, and others either side, the outermost off the tips.
+const SMOKE_LINES = [
+  ...[-0.3, -0.21, -0.14, -0.08, 0.05, 0.11, 0.18, 0.27].map((y) => ({ y, z: 0.02 })),
+  ...[-0.16, -0.09, -0.02, 0.05, 0.12, 0.2].flatMap((y) => [0.42, 0.72].map((z) => ({ y, z }))),
+  ...[-0.02, 0.05, 0.1, 0.16].flatMap((y) => [0.92, 1.0].map((z) => ({ y, z }))),
+  ...[-0.05, 0.1, 0.2].flatMap((y) => [-0.5, -0.95].map((z) => ({ y, z }))),
+];
 
 function bodyRadius(x) {
   if (x > NOSE_START) {
@@ -145,12 +178,6 @@ function aircraftSurfaces() {
     return Array.from({ length: segments }, (_, j) => bodyPoint(x, (2 * Math.PI * j) / segments));
   });
 
-  const wing = [
-    { x: 0.27, y: -0.07, z: 0, c: 0.62 },
-    { x: 0.2, y: -0.062, z: 0.11, c: 0.52 },
-    { x: 0.04, y: -0.03, z: 0.37, c: 0.27 },
-    { x: -0.28, y: 0.045, z: 0.98, c: 0.085 },
-  ];
   const winglet = [
     { x: -0.28, y: 0.045, z: 0.98, c: 0.085 },
     { x: -0.345, y: 0.17, z: 1.01, c: 0.036 },
@@ -181,8 +208,8 @@ function aircraftSurfaces() {
 
   return [
     skin(body),
-    skin(airfoilRings(wing, 1, 0.13)),
-    skin(airfoilRings(mirrored(wing), 1, 0.13)),
+    skin(airfoilRings(WING, 1, WING_THICKNESS)),
+    skin(airfoilRings(mirrored(WING), 1, WING_THICKNESS)),
     skin(airfoilRings(winglet, 2, 0.1)),
     skin(airfoilRings(mirrored(winglet), 2, 0.1)),
     skin(airfoilRings(stabilizer, 1, 0.1)),
@@ -202,14 +229,6 @@ const EMITTERS = [
   { at: [-0.36, 0.17, 1.01], spread: 0.016, share: 0.08 },
   { at: [-0.36, 0.17, -1.01], spread: 0.016, share: 0.08 },
 ];
-
-// The cockpit's windscreen, left dark.
-function inWindscreen([x, y, z]) {
-  if (x < 0.84 || x > 0.9) return false;
-  const up = (y - bodyCenter(x)) / bodyRadius(x);
-  // Raked back, and split down the middle.
-  return up > 0.3 && up < 0.72 - (0.9 - x) * 3 && Math.abs(z) > 0.006;
-}
 
 // Every particle, in one interleaved array. Built once and kept, as it never changes.
 let cloud;
@@ -240,7 +259,7 @@ function buildCloud() {
   }
 
   const perLight = 8;
-  const particles = SURFACE_PARTICLES + lights.length * perLight + CONTRAIL_PARTICLES + AIR_PARTICLES;
+  const particles = SURFACE_PARTICLES + lights.length * perLight + CONTRAIL_PARTICLES + AIR_PARTICLES + SMOKE_PARTICLES;
   const data = new Float32Array(particles * FLOATS);
   let count = 0;
   const put = (position, normal, kind) => {
@@ -254,7 +273,7 @@ function buildCloud() {
     let v = Math.random();
     if (u + v > 1) [u, v] = [1 - u, 1 - v];
     const point = a.map((p, i) => p + (b[i] - p) * u + (c[i] - p) * v);
-    if (!inWindscreen(point)) put(point, normal, KIND.surface);
+    put(point, normal, KIND.surface);
   }
 
   for (const { point, normal, size } of lights) {
@@ -277,9 +296,17 @@ function buildCloud() {
     put([0, height * 0.33, 1.2 - Math.random() * 4.6], [0, 0, 0], KIND.air);
   }
 
+  // The smoke rides the air, just kept to its lines.
+  for (let i = 0; i < SMOKE_PARTICLES; i++) {
+    const { y, z } = SMOKE_LINES[i % SMOKE_LINES.length];
+    put([0, y + (Math.random() - 0.5) * 0.006, z + (Math.random() - 0.5) * 0.006], [0, 0, 0], KIND.air);
+  }
+
   cloud = { data: data.subarray(0, count * FLOATS), count };
   return cloud;
 }
+
+const WING_GLSL = WING.map(({ x, y, c }) => `vec3(${x.toFixed(3)}, ${y.toFixed(3)}, ${c.toFixed(3)})`);
 
 const VERTEX = /* glsl */ `
   attribute vec3 aPosition;
@@ -303,6 +330,13 @@ const VERTEX = /* glsl */ `
 
   const vec3 LIGHT = vec3(0.32, 0.86, 0.4);
   const float SEAM = 0.055; // how far the bands' particles mix past an edge, in screens
+  const float PI = 3.14159265;
+  const float CIRCULATION = ${CIRCULATION.toFixed(4)}; // per unit of air speed
+  const float WING_TIP = ${WING[3].z.toFixed(2)};
+  const float TRAILING_EDGE = ${(WING[3].x - WING[3].c).toFixed(3)};
+  const float VORTEX_Z = ${(VORTEX_SPACING / 2).toFixed(3)}; // once the wake has rolled up
+  const float VORTEX_Y = 0.1; // where each one leaves the wingtip
+  const float VORTEX_CORE = 0.06;
 
   vec4 project(vec3 world) {
     vec4 clip = uViewProjection * vec4(world, 1.0);
@@ -355,12 +389,83 @@ const VERTEX = /* glsl */ `
 
   // The x that puts a point of this height and depth at \`along\` on the screen.
   float xAt(vec3 point, float along) {
-    vec4 a = project(uModel * vec3(0.0, point.yz));
-    vec4 b = project(uModel * vec3(1.0, point.yz));
+    vec4 a = project(vec3(0.0, point.yz));
+    vec4 b = project(vec3(1.0, point.yz));
     float target = uRows > 0.5 ? 1.0 - 2.0 * along : 2.0 * along - 1.0;
     float from = uRows > 0.5 ? a.y : a.x;
     float to = uRows > 0.5 ? b.y : b.x;
     return (target * a.w - from) / (to - from - target * (b.w - a.w));
+  }
+
+  // The wing's leading edge x, height and chord, s out from the middle.
+  vec3 wingAt(float s) {
+    if (s < ${WING[1].z.toFixed(2)}) return mix(${WING_GLSL[0]}, ${WING_GLSL[1]}, s / ${WING[1].z.toFixed(2)});
+    if (s < ${WING[2].z.toFixed(2)}) return mix(${WING_GLSL[1]}, ${WING_GLSL[2]}, (s - ${WING[1].z.toFixed(2)}) / ${(WING[2].z - WING[1].z).toFixed(2)});
+    return mix(${WING_GLSL[2]}, ${WING_GLSL[3]}, min((s - ${WING[2].z.toFixed(2)}) / ${(WING[3].z - WING[2].z).toFixed(2)}, 1.0));
+  }
+
+  float bodyRadiusAt(float x) {
+    if (abs(x) >= 1.0) return 0.0;
+    if (x > ${NOSE_START.toFixed(2)}) {
+      float k = (x - ${NOSE_START.toFixed(2)}) / ${(1 - NOSE_START).toFixed(2)};
+      return ${BODY_RADIUS.toFixed(2)} * pow(max(1.0 - pow(k, 2.3), 0.0), 0.55);
+    }
+    if (x < ${TAIL_START.toFixed(2)}) {
+      return ${BODY_RADIUS.toFixed(2)} * (1.0 - 0.9 * pow((${TAIL_START.toFixed(2)} - x) / ${(TAIL_START + 1).toFixed(2)}, 1.5));
+    }
+    return ${BODY_RADIUS.toFixed(2)};
+  }
+
+  // Behind the wing, a point in the aircraft's frame is turned about the vortex
+  // trailing from each tip, by Lamb–Oseen's swirl for how far it has come. The
+  // two together are the wake's downwash: down between them, up outside them.
+  // \`amount\` eases this in for what sets out from the aircraft itself.
+  vec3 inWake(vec3 point, float amount) {
+    float behind = max(TRAILING_EDGE - point.x, 0.0) * amount;
+    if (behind <= 0.0) return point;
+    float rolled = smoothstep(0.0, 2.5, behind);
+    for (int i = 0; i < 2; i++) {
+      float side = i == 0 ? 1.0 : -1.0;
+      vec2 start = vec2(side * WING_TIP, VORTEX_Y);
+      vec2 core = vec2(side * mix(WING_TIP, VORTEX_Z, rolled), VORTEX_Y - behind * CIRCULATION / (2.0 * VORTEX_Z * PI));
+      vec2 from = point.zy - start;
+      float r2 = dot(from, from) + 0.00001;
+      float angle = side * behind * CIRCULATION / (2.0 * PI * r2) * (1.0 - exp(-r2 / (VORTEX_CORE * VORTEX_CORE)));
+      vec2 turned = vec2(from.x * cos(angle) - from.y * sin(angle), from.x * sin(angle) + from.y * cos(angle));
+      // What's caught near the vortex goes where it goes.
+      point.zy += turned - from + (core - start) * exp(-r2 / 0.05);
+    }
+    return point;
+  }
+
+  // Where the free stream's straight line through a point is bent to.
+  vec3 streamlined(vec3 world) {
+    vec3 point = inWake(world * uModel, 1.0); // the transpose, so into the aircraft's frame
+
+    // The wing's lift: the circulation round it lifts the air ahead of it and over
+    // it, to a stream function for a vortex at its quarter chord.
+    float s = abs(point.z);
+    vec3 wing = wingAt(s);
+    float chord = wing.z * (1.0 - smoothstep(WING_TIP - 0.03, WING_TIP + 0.03, s));
+    vec2 toWing = vec2(point.x - wing.x + chord * 0.25, point.y - wing.y);
+    float lift = CIRCULATION * sqrt(max(1.0 - s * s / (WING_TIP * WING_TIP), 0.0)) / (2.0 * PI);
+    float above = point.y - wing.y;
+    point.y += lift * max(log(0.6 / max(length(toWing), 0.03)), 0.0);
+
+    // Air can't pass through either the wing or the body, and a thin body's
+    // stream tubes keep their area, so what reaches one parts around it.
+    float across = (wing.x - point.x) / max(chord, 0.001);
+    if (across > 0.0 && across < 1.0) {
+      float thick = ${(WING_THICKNESS / 2).toFixed(3)} * chord * 4.0 * across * (1.0 - across) * 1.15;
+      point.y = wing.y + sign(above) * sqrt(above * above + thick * thick) + point.y - (wing.y + above);
+    }
+    float radius = bodyRadiusAt(point.x) * 1.08;
+    float axis = point.x < ${TAIL_START.toFixed(2)} ? (${BODY_RADIUS.toFixed(2)} - bodyRadiusAt(point.x)) * 0.92 : 0.0;
+    vec2 off = vec2(point.y - axis, point.z);
+    float r = length(off) + 0.00001;
+    point.yz = vec2(axis, 0.0) + off / r * sqrt(r * r + radius * radius);
+
+    return uModel * point;
   }
 
   void main() {
@@ -377,14 +482,16 @@ const VERTEX = /* glsl */ `
       ? fract(aRand.x + uPhases[home] * (0.85 + 0.3 * aRand.y))
       : fract((contrail ? aRand.x : aRand.x * 37.0) + uTime * rate);
 
-    vec3 position = aPosition;
-    if (contrail) position.x = xAt(position, carried(alongOf(project(uModel * position)), life / rate, flow));
+    // The stream runs level, whichever way the aircraft is pitched: that's its
+    // angle of attack. The air's own positions are in the world already.
+    vec3 world = air ? aPosition : uModel * aPosition;
+    if (contrail) world.x = xAt(world, carried(alongOf(project(world)), life / rate, flow));
     if (air) {
       float crossed = flow > 0.0 ? life : 1.0 - life;
-      position.x = xAt(position, (float(home) + crossed) / uCount - seamOffset());
+      world.x = xAt(world, (float(home) + crossed) / uCount - seamOffset());
     }
     // The wind that picks at a particle is that of the band it's in.
-    float wind = uWinds[air ? home : bandAt(project(uModel * position))];
+    float wind = uWinds[air ? home : bandAt(project(world))];
 
     vec3 normal = uModel * aNormal;
     float alpha;
@@ -394,18 +501,20 @@ const VERTEX = /* glsl */ `
     if (air) {
       // Fuller ahead of the wings, where nothing is shed to fill the screen,
       // and gone before it wraps around.
-      alpha = (0.5 + 0.3 * wind) * mix(0.32, 1.0, smoothstep(-1.1, 0.7, position.x))
+      alpha = (0.5 + 0.3 * wind) * mix(0.7, 1.0, smoothstep(-1.1, 0.7, world.x))
         * smoothstep(0.0, 0.08, life) * (1.0 - smoothstep(0.92, 1.0, life));
       light = 0.62 + 0.3 * aRand.y;
+      world = streamlined(world);
     } else if (contrail) {
-      // The trail fans out as it ages, wider in a stronger wind.
-      position += aNormal * (1.0 + (10.0 + 34.0 * wind) * sqrt(life));
-      position.y -= life * life * 0.3;
+      // The trail fans out as it ages, wider in a stronger wind, and the wake
+      // takes it from there.
+      world += normal * (1.0 + (10.0 + 34.0 * wind) * sqrt(life));
+      world = uModel * inWake(world * uModel, smoothstep(0.0, 0.03, life));
       alpha = smoothstep(0.0, 0.015, life) * pow(1.0 - life, 2.2) * 0.62;
       light = 0.72;
       size *= 1.0 + 0.5 * life;
     } else {
-      vec3 toEye = normalize(uEye - uModel * position);
+      vec3 toEye = normalize(uEye - world);
       float facing = dot(normal, toEye);
       float sun = max(dot(normal, normalize(LIGHT)), 0.0);
       float rim = pow(1.0 - clamp(facing, 0.0, 1.0), 3.0);
@@ -417,11 +526,12 @@ const VERTEX = /* glsl */ `
       if (aKind < 0.5) {
         float taper = mix(0.85, 1.5, smoothstep(0.9, -1.0, aPosition.x));
         if (aRand.y < (0.07 + 0.62 * wind) * taper) {
-          float start = position.x;
-          position.x = xAt(position, carried(alongOf(project(uModel * position)), life / rate, flow));
-          float flight = start - position.x;
-          position.y += (sin(life * 7.0 + aRand.x * 40.0) * 0.06 + 0.02) * flight;
-          position.z += sin(life * 5.0 + aRand.x * 90.0) * 0.07 * flight;
+          float start = world.x;
+          world.x = xAt(world, carried(alongOf(project(world)), life / rate, flow));
+          float flight = start - world.x;
+          world.y += (sin(life * 7.0 + aRand.x * 40.0) * 0.06 + 0.02) * flight;
+          world.z += sin(life * 5.0 + aRand.x * 90.0) * 0.07 * flight;
+          world = uModel * inWake(world * uModel, smoothstep(0.0, 0.15, life));
           alpha = mix(alpha, 0.6, smoothstep(0.0, 0.1, life)) * (1.0 - life);
         }
       } else {
@@ -432,7 +542,7 @@ const VERTEX = /* glsl */ `
       }
     }
 
-    gl_Position = project(uModel * position);
+    gl_Position = project(world);
 
     // The color of the band it's in now, wherever it came from, carried by the
     // light and washing out toward white at its brightest.
