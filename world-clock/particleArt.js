@@ -37,7 +37,7 @@ const TINT_STOPS = [
 // How fast the seams wander, in noise units per second.
 const SEAM_DRIFT = 0.48;
 
-function tintFor(t) {
+export function tintFor(t) {
   if (t <= TINT_STOPS[0][0]) return TINT_STOPS[0][1];
   for (let i = 1; i < TINT_STOPS.length; i++) {
     const [t1, c1] = TINT_STOPS[i];

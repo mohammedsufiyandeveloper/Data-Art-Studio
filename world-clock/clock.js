@@ -1,6 +1,4 @@
 import { startArt } from "./art.js";
-import { startFabricArt } from "./fabricArt.js";
-import { startParticleArt } from "./particleArt.js";
 import { createAnalogClock } from "./analogClock.js";
 
 const WEATHER_REFRESH_MS = 10 * 60 * 1000;
@@ -43,7 +41,7 @@ export function inkFor([r, g, b]) {
  * (an entry of ARTS in arts.js).
  */
 export function startClock(root, places, { art, clockStyle, onBack }) {
-  root.className = ["clock-view", art.id === "map" && "map-art", art.noWind && "no-wind", clockStyle === "digital" && "digital"].filter(Boolean).join(" ");
+  root.className = ["clock-view", art.id === "map" && "map-art", art.noWind && "no-wind", art.bandLines && "band-lines", clockStyle === "digital" && "digital"].filter(Boolean).join(" ");
   root.style.setProperty("--count", places.length);
 
   const canvas = document.createElement("canvas");
@@ -148,8 +146,7 @@ export function startClock(root, places, { art, clockStyle, onBack }) {
   tick();
   loadWeather();
   const timers = [setInterval(tick, 1000), setInterval(loadWeather, WEATHER_REFRESH_MS)];
-  const startBandArt = art.id === "particles" ? startParticleArt : startFabricArt;
-  const stopArt = art.id === "map" ? startArt(canvas, bands) : startBandArt(canvas, () => bands.map((b) => b.art));
+  const stopArt = art.start ? art.start(canvas, () => bands.map((b) => b.art)) : startArt(canvas, bands);
 
   return function stop() {
     timers.forEach(clearInterval);

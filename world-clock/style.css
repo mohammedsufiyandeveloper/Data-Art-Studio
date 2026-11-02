@@ -468,6 +468,19 @@ button {
   color: #fff;
 }
 
+/* Dotted lines between the cities, for an artwork whose colors melt together. */
+@media (min-width: 641px) {
+  .clock-view.band-lines .band:not(:last-of-type) {
+    border-right: 1px dotted rgb(255 255 255 / 0.4);
+  }
+}
+
+@media (max-width: 640px) {
+  .clock-view.band-lines .band:not(:last-of-type) {
+    border-bottom: 1px dotted rgb(255 255 255 / 0.4);
+  }
+}
+
 .map-art .credit,
 .map-art .credit:hover {
   color: #000;
@@ -1030,6 +1043,10 @@ body:has(.landing-view) {
 
 .lp-frame.has-map .mini-band:not(:last-child) {
   border-right: 1px solid rgb(255 255 255 / 0.07);
+}
+
+.lp-frame.band-lines .mini-band:not(:last-child) {
+  border-right: 1px dotted rgb(255 255 255 / 0.4);
 }
 
 .lp-frame .mini-band {
