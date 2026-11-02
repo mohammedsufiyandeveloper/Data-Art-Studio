@@ -11,7 +11,10 @@
  * two bands' particles are scattered among each other, so the colors meet softly
  * while each particle stays pure. Each band's wind
  * picks its part of the aircraft apart: in still air it holds its shape, and
- * the windier the city the more of it streams away, and the further.
+ * the windier the city the more of it streams away.
+ *
+ * Everything in the air moves at the speed of the wind in the band it's passing
+ * through, so a particle blown into a calmer band slows down as it crosses.
  *
  * `getBands` returns one { tempC, windKph } per band, or nothing for a band
  * whose weather hasn't arrived yet. Read from CSS on the canvas: --art-rows
@@ -25,6 +28,11 @@ const WAITING_COLOR = [150, 156, 170];
 
 // Wind speed (km/h) at which a band is fully blown apart.
 const FULL_WIND_KPH = 40;
+// How fast the air crosses the screen, in screens a second: a slow drift in still
+// air, plus this much for each km/h of wind, up to a limit.
+const CALM_SPEED = 0.02;
+const SPEED_PER_KPH = 0.004;
+const TOP_SPEED = 0.34;
 const SURFACE_PARTICLES = 240000;
 const CONTRAIL_PARTICLES = 40000;
 const AIR_PARTICLES = 170000;
@@ -288,12 +296,12 @@ const VERTEX = /* glsl */ `
   uniform float uShift; // how far down the screen the aircraft sits
   uniform vec3 uColors[${MAX_BANDS}]; // each band's tint, 0–1
   uniform float uWinds[${MAX_BANDS}]; // each band's wind, 0–1
+  uniform float uSpeeds[${MAX_BANDS}]; // each band's air speed, in screens a second
+  uniform float uPhases[${MAX_BANDS}]; // how many band widths its air has moved so far
   varying vec3 vColor;
   varying float vAlpha;
 
   const vec3 LIGHT = vec3(0.32, 0.86, 0.4);
-  const float CONTRAIL_LENGTH = 9.0;
-  const float AIR_LENGTH = 6.0;
   const float SEAM = 0.055; // how far the bands' particles mix past an edge, in screens
 
   vec4 project(vec3 world) {
@@ -302,29 +310,81 @@ const VERTEX = /* glsl */ `
     return clip;
   }
 
-  // Which band a point falls in on the screen. Each particle reads the edges
-  // as a little to one side, its own way, more often slightly than far.
-  int bandAt(vec4 clip) {
+  // How far across the bands a point falls on the screen, 0 to 1.
+  float alongOf(vec4 clip) {
     vec2 screen = clip.xy / clip.w * 0.5 + 0.5;
-    float along = uRows > 0.5 ? 1.0 - screen.y : screen.x;
-    along += (fract(aRand.x * 91.7) + fract(aRand.y * 57.3) - 1.0) * SEAM;
-    return int(clamp(floor(along * uCount), 0.0, uCount - 1.0));
+    return uRows > 0.5 ? 1.0 - screen.y : screen.x;
+  }
+
+  float bandIndex(float along) {
+    return clamp(floor(along * uCount), 0.0, uCount - 1.0);
+  }
+
+  // Each particle reads the bands' edges as a little to one side, its own way,
+  // more often slightly than far.
+  float seamOffset() {
+    return (fract(aRand.x * 91.7) + fract(aRand.y * 57.3) - 1.0) * SEAM;
+  }
+
+  // Which band a point falls in on the screen, by this particle's reading.
+  int bandAt(vec4 clip) {
+    return int(bandIndex(alongOf(clip) + seamOffset()));
+  }
+
+  // Where the air carries something in \`seconds\`, from \`along\`, through each
+  // band in turn at that band's speed. It stops just off the screen.
+  float carried(float along, float seconds, float flow) {
+    for (int i = 0; i < ${MAX_BANDS}; i++) {
+      float band = bandIndex(along);
+      float speed = uSpeeds[int(band)];
+      if (band == (flow > 0.0 ? uCount - 1.0 : 0.0)) {
+        along += flow * seconds * speed;
+        break;
+      }
+      float edge = (band + (flow > 0.0 ? 1.0 : 0.0)) / uCount;
+      float needed = abs(edge - along) / speed;
+      if (seconds <= needed) {
+        along += flow * seconds * speed;
+        break;
+      }
+      seconds -= needed;
+      along = edge + flow * 0.0001;
+    }
+    return clamp(along, -0.3, 1.3);
+  }
+
+  // The x that puts a point of this height and depth at \`along\` on the screen.
+  float xAt(vec3 point, float along) {
+    vec4 a = project(uModel * vec3(0.0, point.yz));
+    vec4 b = project(uModel * vec3(1.0, point.yz));
+    float target = uRows > 0.5 ? 1.0 - 2.0 * along : 2.0 * along - 1.0;
+    float from = uRows > 0.5 ? a.y : a.x;
+    float to = uRows > 0.5 ? b.y : b.x;
+    return (target * a.w - from) / (to - from - target * (b.w - a.w));
   }
 
   void main() {
     bool contrail = aKind > 1.5 && aKind < 2.5;
     bool air = aKind > 2.5;
-    float life = contrail
-      ? fract(aRand.x + uTime * (0.05 + 0.012 * aRand.y))
-      : air
-        ? fract(aRand.x + uTime * (0.045 + 0.02 * aRand.y))
-        : fract(aRand.x * 37.0 + uTime * (0.1 + 0.16 * aRand.y));
+    // The way the air crosses the bands, nose to tail.
+    float flow = uRows > 0.5 ? 1.0 : -1.0;
+    // The air is one conveyor to a band, at that band's speed, so that each stays
+    // as full as the next however hard it blows. A particle rides its band's from
+    // one edge to the other, and the next band's picks up where it leaves off.
+    int home = int(bandIndex(fract(aRand.y * 173.1)));
+    float rate = contrail ? 0.05 + 0.012 * aRand.y : 0.1 + 0.16 * aRand.y;
+    float life = air
+      ? fract(aRand.x + uPhases[home] * (0.85 + 0.3 * aRand.y))
+      : fract((contrail ? aRand.x : aRand.x * 37.0) + uTime * rate);
 
-    // The wind that moves a particle is that of the band it sets out from.
     vec3 position = aPosition;
-    if (contrail) position.x -= life * life * CONTRAIL_LENGTH + life * 0.4;
-    if (air) position.x += AIR_LENGTH * (0.5 - life);
-    float wind = uWinds[bandAt(project(uModel * position))];
+    if (contrail) position.x = xAt(position, carried(alongOf(project(uModel * position)), life / rate, flow));
+    if (air) {
+      float crossed = flow > 0.0 ? life : 1.0 - life;
+      position.x = xAt(position, (float(home) + crossed) / uCount - seamOffset());
+    }
+    // The wind that picks at a particle is that of the band it's in.
+    float wind = uWinds[air ? home : bandAt(project(uModel * position))];
 
     vec3 normal = uModel * aNormal;
     float alpha;
@@ -357,8 +417,9 @@ const VERTEX = /* glsl */ `
       if (aKind < 0.5) {
         float taper = mix(0.85, 1.5, smoothstep(0.9, -1.0, aPosition.x));
         if (aRand.y < (0.07 + 0.62 * wind) * taper) {
-          float flight = (0.8 + 3.3 * wind) * life * (0.4 + 0.6 * life);
-          position.x -= flight;
+          float start = position.x;
+          position.x = xAt(position, carried(alongOf(project(uModel * position)), life / rate, flow));
+          float flight = start - position.x;
           position.y += (sin(life * 7.0 + aRand.x * 40.0) * 0.06 + 0.02) * flight;
           position.z += sin(life * 5.0 + aRand.x * 90.0) * 0.07 * flight;
           alpha = mix(alpha, 0.6, smoothstep(0.0, 0.1, life)) * (1.0 - life);
@@ -473,9 +534,11 @@ export function startPlaneArt(canvas, getBands) {
   gl.clearColor(0, 0, 0, 1);
 
   let colors = [];
-  let winds = [];
+  let windsKph = [];
   const colorData = new Float32Array(MAX_BANDS * 3);
   const windData = new Float32Array(MAX_BANDS);
+  const speedData = new Float32Array(MAX_BANDS);
+  const phaseData = new Float32Array(MAX_BANDS);
   let last = performance.now();
   let frame = 0;
   let drawnKey = "";
@@ -494,21 +557,19 @@ export function startPlaneArt(canvas, getBands) {
     // Ease toward the latest colors and winds, at the same pace on slow frames.
     const bands = getBands().slice(0, MAX_BANDS);
     if (!bands.length) bands.push(null);
-    const ease = reducedMotion ? 1 : 1 - Math.exp(-(ms - last) / 450);
-    const windEase = reducedMotion ? 1 : 1 - Math.exp(-(ms - last) / 2500);
+    const elapsed = Math.max(ms - last, 0);
+    const ease = reducedMotion ? 1 : 1 - Math.exp(-elapsed / 450);
+    const windEase = reducedMotion ? 1 : 1 - Math.exp(-elapsed / 2500);
     last = ms;
     colors = bands.map((b, i) => {
       const target = b ? tintFor(b.tempC) : WAITING_COLOR;
       return (colors[i] ?? target).map((c, j) => c + (target[j] - c) * ease);
     });
-    winds = bands.map((b, i) => {
-      const target = Math.min((b?.windKph ?? 0) / FULL_WIND_KPH, 1);
-      return (winds[i] ?? 0) + (target - (winds[i] ?? 0)) * windEase;
-    });
+    windsKph = bands.map((b, i) => (windsKph[i] ?? 0) + ((b?.windKph ?? 0) - (windsKph[i] ?? 0)) * windEase);
 
     // With reduced motion the aircraft holds still, so it's only redrawn when
     // something it shows changes.
-    const frameKey = `${colors.map((c) => c.map(Math.round))}|${winds.map((v) => v.toFixed(2))}|${w}x${h}|${rows}`;
+    const frameKey = `${colors.map((c) => c.map(Math.round))}|${windsKph.map((v) => v.toFixed(1))}|${w}x${h}|${rows}`;
     if (reducedMotion && frameKey === drawnKey) return;
     drawnKey = frameKey;
 
@@ -535,8 +596,16 @@ export function startPlaneArt(canvas, getBands) {
     gl.uniform1f(u("uPoint"), 1.5 * Math.max(0.7 * dpr, Math.min(w, h * 1.78) / 1440));
     colors.forEach((c, i) => colorData.set(c.map((v) => v / 255), i * 3));
     gl.uniform3fv(u("uColors[0]"), colorData);
-    windData.set(winds);
+    windsKph.forEach((kph, i) => {
+      windData[i] = Math.min(kph / FULL_WIND_KPH, 1);
+      speedData[i] = Math.min(CALM_SPEED + kph * SPEED_PER_KPH, TOP_SPEED);
+      // Kept running rather than worked out from the time, so that a change of
+      // wind changes the air's speed and doesn't throw it somewhere else.
+      if (!reducedMotion) phaseData[i] += (speedData[i] * bands.length * elapsed) / 1000;
+    });
     gl.uniform1fv(u("uWinds[0]"), windData);
+    gl.uniform1fv(u("uSpeeds[0]"), speedData);
+    gl.uniform1fv(u("uPhases[0]"), phaseData);
     gl.drawArrays(gl.POINTS, 0, count);
   }
   frame = requestAnimationFrame(draw);
